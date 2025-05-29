@@ -8,7 +8,7 @@ on creating projects and obtaining API keys.
 ## Installation
 
 ```bash
-pip install slugkit
+pip install slugkit-py-sdk
 ```
 
 ## API Overview
