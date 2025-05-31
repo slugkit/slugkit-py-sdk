@@ -39,6 +39,49 @@ stats = client.generator.stats()
 client.generator.reset()
 ```
 
+### Async Usage
+
+The SDK also provides an async client for use with async/await code:
+
+```python
+import asyncio
+from slugkit import AsyncClient
+
+async def main():
+    # Initialize the async client
+    client = AsyncClient(
+        base_url="https://dev.slugkit.dev/api/v1",
+        api_key="your-api-key"
+    )
+
+    # Generate a single ID
+    id = await client.generator()[0]
+
+    # Generate multiple IDs
+    ids = await client.generator(count=5)
+
+    # Get generator stats
+    stats = await client.generator.stats()
+
+    # Reset the generator
+    await client.generator.reset()
+
+    # Test a pattern
+    ids = await client.test(
+        pattern="your-pattern",
+        seed="optional-seed",
+        sequence=1,
+        count=5
+    )
+
+    # Stream IDs asynchronously
+    async for id in client.generator:
+        print(id)
+
+# Run the async code
+asyncio.run(main())
+```
+
 ### Pattern Testing
 
 ```python
