@@ -91,7 +91,11 @@ def pattern_test(
     if seed is None:
         seed = str(uuid.uuid4())
     client = SyncClient(app_context.base_url, app_context.api_key)
-    result = client.test(pattern, seed=seed, sequence=sequence, count=count)
+    try:
+        result = client.test(pattern, seed=seed, sequence=sequence, count=count)
+    except httpx.HTTPStatusError as e:
+        logger.error(f"Failed to test pattern: {e.response.text}")
+        raise typer.Exit(1)
     if app_context.output_format == OutputFormat.JSON:
         print(json.dumps(result, indent=2))
     else:
@@ -117,6 +121,35 @@ def next(
     logger.info(f"Generating {count} human-readable IDs at {app_context.base_url}")
     client = SyncClient(app_context.base_url, app_context.api_key)
     gen = client.generator
+    if count > 1:
+        gen = gen.with_limit(count).with_batch_size(batch_size)
+        if app_context.output_format == OutputFormat.JSON:
+            print(json.dumps(list(gen), indent=2))
+        else:
+            for slug in gen:
+                print(slug)
+    elif count == 1:
+        if app_context.output_format == OutputFormat.JSON:
+            print(json.dumps(gen(), indent=2))
+        else:
+            print(gen()[0])
+    else:
+        raise ValueError(f"Invalid count: {count}")
+
+
+@app.command()
+def nth(
+    sequence: int = typer.Argument(0, help="The sequence number to start from."),
+    count: int = typer.Argument(1, help="The number of human-readable IDs to generate."),
+    batch_size: int = typer.Option(
+        10, "--batch-size", "-b", help="The number of human-readable IDs to generate in a batch."
+    ),
+):
+    """
+    Generate human-readable IDs from a given sequence number.
+    """
+    client = SyncClient(app_context.base_url, app_context.api_key)
+    gen = client.generator.with_dry_run(True).starting_from(sequence)
     if count > 1:
         gen = gen.with_limit(count).with_batch_size(batch_size)
         if app_context.output_format == OutputFormat.JSON:
