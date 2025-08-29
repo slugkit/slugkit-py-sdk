@@ -1,6 +1,8 @@
 import httpx
+import logging
 from enum import Enum
 from typing import Any, Callable, Self
+from pydantic import BaseModel
 
 
 class EventType(Enum):
@@ -23,105 +25,48 @@ class DatePart(Enum):
     TOTAL = "total"
 
 
-class StatsItem:
-    """Class representing a single stats item from the API response."""
+class StatsItem(BaseModel):
+    """Pydantic model representing a single stats item from the API response."""
 
-    def __init__(
-        self,
-        event_type: str,
-        date_part: str,
-        total_count: int,
-        request_count: int,
-        total_duration_us: int,
-        avg_duration_us: float,
-    ):
-        self.event_type = event_type
-        self.date_part = date_part
-        self.total_count = total_count
-        self.request_count = request_count
-        self.total_duration_us = total_duration_us
-        self.avg_duration_us = avg_duration_us
+    event_type: str
+    date_part: str
+    total_count: int
+    request_count: int
+    total_duration_us: int
+    avg_duration_us: float
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "StatsItem":
-        """Create a StatsItem instance from a dictionary."""
-        return cls(
-            event_type=data["event_type"],
-            date_part=data["date_part"],
-            total_count=data["total_count"],
-            request_count=data["request_count"],
-            total_duration_us=data["total_duration_us"],
-            avg_duration_us=data["avg_duration_us"],
-        )
+        """Create a StatsItem instance from a dictionary (compat helper)."""
+        return cls.model_validate(data)
 
     def to_dict(self) -> dict[str, Any]:
-        """Convert the StatsItem to a dictionary."""
-        return {
-            "event_type": self.event_type,
-            "date_part": self.date_part,
-            "total_count": self.total_count,
-            "request_count": self.request_count,
-            "total_duration_us": self.total_duration_us,
-            "avg_duration_us": self.avg_duration_us,
-        }
-
-    def __repr__(self) -> str:
-        return (
-            f"StatsItem(event_type='{self.event_type}', date_part='{self.date_part}', total_count={self.total_count})"
-        )
+        """Convert the StatsItem to a dictionary (compat helper)."""
+        return self.model_dump()
 
 
-class SeriesInfo:
-    """Class representing series information from the API response."""
+class SeriesInfo(BaseModel):
+    """Pydantic model representing series information from the API response."""
 
-    def __init__(
-        self,
-        slug: str,
-        org_slug: str,
-        pattern: str,
-        max_pattern_length: int,
-        capacity: str,
-        generated_count: str,
-        mtime: str,
-    ):
-        self.slug = slug
-        self.org_slug = org_slug
-        self.pattern = pattern
-        self.max_pattern_length = max_pattern_length
-        self.capacity = capacity
-        self.generated_count = generated_count
-        self.mtime = mtime
+    slug: str
+    org_slug: str
+    pattern: str
+    max_pattern_length: int
+    capacity: str
+    generated_count: str
+    mtime: str
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "SeriesInfo":
-        """Create a SeriesInfo instance from a dictionary."""
-        return cls(
-            slug=data["slug"],
-            org_slug=data["org_slug"],
-            pattern=data["pattern"],
-            max_pattern_length=data["max_pattern_length"],
-            capacity=data["capacity"],
-            generated_count=data["generated_count"],
-            mtime=data["mtime"],
-        )
+        """Create a SeriesInfo instance from a dictionary (compat helper)."""
+        return cls.model_validate(data)
 
     def to_dict(self) -> dict[str, Any]:
-        """Convert the SeriesInfo to a dictionary."""
-        return {
-            "slug": self.slug,
-            "org_slug": self.org_slug,
-            "pattern": self.pattern,
-            "max_pattern_length": self.max_pattern_length,
-            "capacity": self.capacity,
-            "generated_count": self.generated_count,
-            "mtime": self.mtime,
-        }
-
-    def __repr__(self) -> str:
-        return f"SeriesInfo(slug='{self.slug}', pattern='{self.pattern}', capacity={self.capacity})"
+        """Convert the SeriesInfo to a dictionary (compat helper)."""
+        return self.model_dump()
 
 
-class GeneratorBase:
+class ApiClientBase:
     MINT_PATH = "/gen/mint"
     SLICE_PATH = "/gen/slice"
     FORGE_PATH = "/gen/forge"
@@ -129,17 +74,25 @@ class GeneratorBase:
     STATS_PATH = "/gen/stats/latest"
     SERIES_INFO_PATH = "/gen/series-info"
 
+    DEFAULT_BATCH_SIZE = 100000
+
+    def __init__(self, http_client: Callable[[], httpx.Client]):
+        self._http_client = http_client
+        self._logger = logging.getLogger(f"{self.__class__.__name__}")
+
+
+class GeneratorBase(ApiClientBase):
     def __init__(
         self,
         http_client: Callable[[], httpx.Client],
         *,
         series_slug: str | None = None,
-        batch_size: int = 1000,
+        batch_size: int = ApiClientBase.DEFAULT_BATCH_SIZE,
         limit: int | None = None,
         dry_run: bool = False,
         sequence: int = 0,
     ):
-        self._http_client = http_client
+        super().__init__(http_client)
         self._series_slug = series_slug
         self._batch_size = batch_size
         self._limit = limit

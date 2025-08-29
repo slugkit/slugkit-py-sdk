@@ -1,5 +1,6 @@
 import pytest
 import asyncio
+import logging
 from slugkit import SyncClient, AsyncClient
 
 
@@ -12,6 +13,9 @@ SERIES_SLUG = "whole-blond-rower-a597"
 # Known test series
 TEST_SERIES_1 = "test-series-1"
 TEST_SERIES_2 = "test-series-2"
+
+# Setup logging
+logging.basicConfig(level=logging.INFO)
 
 
 @pytest.fixture

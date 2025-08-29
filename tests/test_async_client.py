@@ -2,7 +2,7 @@ import pytest
 import httpx
 from unittest.mock import Mock, patch, AsyncMock
 from slugkit import AsyncClient
-from slugkit.async_client import AsyncSlugGenerator, AsyncRandomGenerator
+from slugkit.async_client import AsyncSeriesClient, AsyncSlugGenerator, AsyncRandomGenerator
 from slugkit.base import StatsItem, SeriesInfo
 
 
@@ -92,8 +92,8 @@ class TestAsyncSlugGenerator:
         assert generator._batch_size == 1
 
         # Test that mint() method exists and can be called
-        assert hasattr(generator, "mint")
-        assert callable(generator.mint)
+        assert hasattr(generator, "stream")
+        assert callable(generator.stream)
 
     @pytest.mark.asyncio
     async def test_async_method_chaining(self, async_client_series):
@@ -138,8 +138,8 @@ class TestAsyncSlugGenerator:
         mock_response.raise_for_status.return_value = None
         mock_http_client.return_value.get = AsyncMock(return_value=mock_response)
 
-        generator = AsyncSlugGenerator(mock_http_client)
-        stats = await generator.stats()
+        series_client = AsyncSeriesClient(mock_http_client)
+        stats = await series_client.stats()
 
         assert isinstance(stats, list)
         assert len(stats) == 2
@@ -164,8 +164,8 @@ class TestAsyncSlugGenerator:
         mock_response.raise_for_status.return_value = None
         mock_http_client.return_value.get = AsyncMock(return_value=mock_response)
 
-        generator = AsyncSlugGenerator(mock_http_client)
-        series_info = await generator.series_info()
+        series_client = AsyncSeriesClient(mock_http_client)
+        series_info = await series_client.info()
 
         assert isinstance(series_info, SeriesInfo)
         assert series_info.slug == "test-series"
@@ -184,11 +184,11 @@ class TestAsyncSlugGenerator:
         mock_response.raise_for_status.return_value = None
         mock_http_client.return_value.post = AsyncMock(return_value=mock_response)
 
-        generator = AsyncSlugGenerator(mock_http_client)
-        await generator.reset()
+        series_client = AsyncSeriesClient(mock_http_client)
+        await series_client.reset()
 
         # Verify the reset endpoint was called
-        mock_http_client.return_value.post.assert_called_once_with(generator.RESET_PATH)
+        mock_http_client.return_value.post.assert_called_once_with(series_client.RESET_PATH)
 
 
 class TestAsyncRandomGenerator:
@@ -360,8 +360,8 @@ class TestAsyncEdgeCases:
         assert generator._batch_size == 10
 
         # Test that mint() method exists and can be called
-        assert hasattr(generator, "mint")
-        assert callable(generator.mint)
+        assert hasattr(generator, "stream")
+        assert callable(generator.stream)
 
     @pytest.mark.asyncio
     async def test_async_streaming_early_termination(self):
@@ -389,8 +389,8 @@ class TestAsyncEdgeCases:
         assert generator._limit is None
 
         # Test that mint() method exists and can be called
-        assert hasattr(generator, "mint")
-        assert callable(generator.mint)
+        assert hasattr(generator, "stream")
+        assert callable(generator.stream)
 
 
 # Integration-style tests (these would require the AsyncClient to be properly implemented)

@@ -1,9 +1,9 @@
 import httpx
 import os
 
-from typing import Any, Self, AsyncGenerator, Callable
+from typing import Any, AsyncGenerator, Callable
 
-from .base import GeneratorBase, StatsItem, SeriesInfo
+from .base import ApiClientBase, GeneratorBase, StatsItem, SeriesInfo
 
 
 class AsyncSlugGenerator(GeneratorBase):
@@ -11,11 +11,12 @@ class AsyncSlugGenerator(GeneratorBase):
         req = self._get_request(count)
         path = self._get_path()
         client = await self._http_client()
+        self._logger.info(f"Requesting {count} slug(s)")
         response = await client.post(path, json=req)
         response.raise_for_status()
         return response.json()
 
-    async def mint(self) -> AsyncGenerator[str, Any]:
+    async def stream(self) -> AsyncGenerator[str, Any]:
         count = 0
         limit = self._limit
         batch_size = self._batch_size
@@ -38,6 +39,7 @@ class AsyncSlugGenerator(GeneratorBase):
                     else:
                         req = {"count": current_batch_size, "sequence": sequence}
 
+                    self._logger.info(f"Requesting batch of {current_batch_size} slug(s)")
                     # Get the streaming response and use it as a context manager
                     stream_response = await client.stream(
                         "POST",
@@ -46,6 +48,7 @@ class AsyncSlugGenerator(GeneratorBase):
                     )
                     async with stream_response as response:
                         response.raise_for_status()
+                        self._logger.debug(f"Received batch of {current_batch_size} slug(s)")
                         # Get the async iterator and use it
                         async_lines = await response.aiter_lines()
                         async for val in async_lines:
@@ -61,27 +64,8 @@ class AsyncSlugGenerator(GeneratorBase):
             logging.error(f"Error in async mint: {e}")
             return
 
-    async def reset(self) -> None:
-        client = await self._http_client()
-        response = await client.post(self.RESET_PATH)
-        response.raise_for_status()
-
-    async def stats(self) -> list[StatsItem]:
-        client = await self._http_client()
-        response = await client.get(self.STATS_PATH)
-        response.raise_for_status()
-        data = response.json()
-        return [StatsItem.from_dict(item) for item in data]
-
-    async def series_info(self) -> SeriesInfo:
-        client = await self._http_client()
-        response = await client.get(self.SERIES_INFO_PATH)
-        response.raise_for_status()
-        data = response.json()
-        return SeriesInfo.from_dict(data)
-
     async def __aiter__(self) -> AsyncGenerator[str, None]:
-        return self.mint()
+        return self.stream()
 
 
 class AsyncRandomGenerator(GeneratorBase):
@@ -111,6 +95,45 @@ class AsyncRandomGenerator(GeneratorBase):
         return response.json()
 
 
+class AsyncSeriesClient(ApiClientBase):
+    def __init__(self, http_client: Callable[[], httpx.AsyncClient]):
+        super().__init__(http_client)
+
+    def __getitem__(self, series_slug: str) -> AsyncSlugGenerator:
+        return self.mint.with_series(series_slug)
+
+    @property
+    def mint(self) -> AsyncSlugGenerator:
+        if not self._api_key:
+            raise ValueError("Mint API is available only for authenticated series")
+        return AsyncSlugGenerator(self._http_client)
+
+    @property
+    def slice(self) -> AsyncSlugGenerator:
+        if not self._api_key:
+            raise ValueError("Slice API is available only for authenticated series")
+        return AsyncSlugGenerator(self._http_client).with_dry_run()
+
+    async def reset(self) -> None:
+        client = await self._http_client()
+        response = await client.post(self.RESET_PATH)
+        response.raise_for_status()
+
+    async def stats(self) -> list[StatsItem]:
+        client = await self._http_client()
+        response = await client.get(self.STATS_PATH)
+        response.raise_for_status()
+        data = response.json()
+        return [StatsItem.from_dict(item) for item in data]
+
+    async def info(self) -> SeriesInfo:
+        client = await self._http_client()
+        response = await client.get(self.SERIES_INFO_PATH)
+        response.raise_for_status()
+        data = response.json()
+        return SeriesInfo.from_dict(data)
+
+
 class AsyncClient:
     def __init__(
         self,
@@ -131,11 +154,6 @@ class AsyncClient:
         self._httpx_client_factory = httpx_client_factory
         self._timeout = timeout
 
-    @property
-    def api_key(self) -> str | None:
-        """Get the API key."""
-        return self._api_key
-
     async def _http_client(self) -> httpx.AsyncClient:
         return self._httpx_client_factory(
             base_url=self.base_url,
@@ -144,22 +162,18 @@ class AsyncClient:
         )
 
     @property
-    def mint(self) -> AsyncSlugGenerator:
-        if not self._api_key:
-            raise ValueError("Mint API is available only for authenticated series")
-        return AsyncSlugGenerator(self._http_client)
-
-    def __getitem__(self, series_slug: str) -> AsyncSlugGenerator:
-        return self.mint.with_series(series_slug)
+    def api_key(self) -> str | None:
+        """Get the API key."""
+        return self._api_key
 
     @property
-    def slice(self) -> AsyncSlugGenerator:
+    def series(self) -> AsyncSeriesClient:
         if not self._api_key:
-            raise ValueError("Slice API is available only for authenticated series")
-        return AsyncSlugGenerator(self._http_client).with_dry_run()
+            raise ValueError("API key is required")
+        return AsyncSeriesClient(self._http_client)
 
     @property
     def forge(self) -> AsyncRandomGenerator:
         if not self._api_key:
-            raise ValueError("Forge API is available only for authenticated series")
+            raise ValueError("API key is required")
         return AsyncRandomGenerator(self._http_client)

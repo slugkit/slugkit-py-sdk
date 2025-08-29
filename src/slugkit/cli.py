@@ -115,7 +115,7 @@ def mint(
     """
     logger.info(f"Generating {count} human-readable IDs at {app_context.base_url}")
     client = SyncClient(app_context.base_url, app_context.api_key)
-    gen = client.mint
+    gen = client.series.mint
     if count > 1:
         gen = gen.with_limit(count).with_batch_size(batch_size)
         if app_context.output_format == OutputFormat.JSON:
@@ -143,7 +143,7 @@ def slice(
     Series counters are not bumped.
     """
     client = SyncClient(app_context.base_url, app_context.api_key)
-    gen = client.slice.starting_from(sequence)
+    gen = client.series.slice.starting_from(sequence)
     if count > 1:
         gen = gen.with_limit(count).with_batch_size(batch_size)
         if app_context.output_format == OutputFormat.JSON:
@@ -167,7 +167,7 @@ def stats():
     """
     client = SyncClient(app_context.base_url, app_context.api_key)
     try:
-        stats_items = client.mint.stats()
+        stats_items = client.series.stats()
         if app_context.output_format == OutputFormat.JSON:
             # Convert StatsItem objects to dictionaries for JSON serialization
             stats_dicts = [item.to_dict() for item in stats_items]
@@ -194,7 +194,7 @@ def series_info():
     """
     client = SyncClient(app_context.base_url, app_context.api_key)
     try:
-        series_info = client.mint.series_info()
+        series_info = client.series.info()
         if app_context.output_format == OutputFormat.JSON:
             # Convert SeriesInfo object to dictionary for JSON serialization
             series_dict = series_info.to_dict()
@@ -221,7 +221,7 @@ def reset():
     try:
         logger.warning(f"Resetting generator at {app_context.base_url}")
         client = SyncClient(app_context.base_url, app_context.api_key)
-        client.mint.reset()
+        client.series.reset()
         logger.info("Generator reset")
     except httpx.HTTPStatusError as e:
         logger.error(f"Failed to reset generator: {e.response.text}")

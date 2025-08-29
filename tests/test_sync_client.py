@@ -33,27 +33,21 @@ class TestSyncClient:
         with pytest.raises(ValueError, match="SLUGKIT_BASE_URL is not set"):
             SyncClient(base_url="")
 
-    def test_mint_property_requires_api_key(self, base_url):
-        """Test that mint property requires API key."""
+    def test_series_property_requires_api_key(self, base_url):
+        """Test that series property requires API key."""
         client = SyncClient(base_url=base_url)
-        with pytest.raises(ValueError, match="Mint API is available only for authenticated series"):
-            _ = client.mint
-
-    def test_slice_property_requires_api_key(self, base_url):
-        """Test that slice property requires API key."""
-        client = SyncClient(base_url=base_url)
-        with pytest.raises(ValueError, match="Mint API is available only for authenticated series"):
-            _ = client.slice
+        with pytest.raises(ValueError, match="API key is required"):
+            _ = client.series.mint
 
     def test_forge_property_requires_api_key(self, base_url):
         """Test that forge property requires API key."""
         client = SyncClient(base_url=base_url)
-        with pytest.raises(ValueError, match="Forge API is available only for authenticated series"):
+        with pytest.raises(ValueError, match="API key is required"):
             _ = client.forge
 
     def test_series_access_bracket_notation(self, sync_client_series):
         """Test accessing series using bracket notation."""
-        series_gen = sync_client_series["test-series"]
+        series_gen = sync_client_series.series["test-series"]
         assert isinstance(series_gen, SyncSlugGenerator)
         assert series_gen._series_slug == "test-series"
 
@@ -63,7 +57,7 @@ class TestSyncSlugGenerator:
 
     def test_mint_single_id(self, sync_client_series):
         """Test generating a single ID."""
-        ids = sync_client_series.mint()
+        ids = sync_client_series.series.mint()
         assert isinstance(ids, list)
         assert len(ids) == 1
         assert isinstance(ids[0], str)
@@ -72,7 +66,7 @@ class TestSyncSlugGenerator:
     def test_mint_multiple_ids(self, sync_client_series):
         """Test generating multiple IDs."""
         count = 5
-        ids = sync_client_series.mint(count=count)
+        ids = sync_client_series.series.mint(count=count)
         assert isinstance(ids, list)
         assert len(ids) == count
         assert all(isinstance(id_, str) for id_ in ids)
@@ -84,16 +78,16 @@ class TestSyncSlugGenerator:
         """Test generating IDs for a specific series."""
         # Use the series slug from the fixture instead of hardcoded series
         series_slug = "whole-blond-rower-a597"
-        ids = sync_client_org[series_slug](count=3)
+        ids = sync_client_org.series[series_slug](count=3)
         assert isinstance(ids, list)
         assert len(ids) == 3
 
     def test_mint_streaming(self, sync_client_series):
         """Test streaming ID generation."""
-        generator = sync_client_series.mint.with_limit(10).with_batch_size(3)
+        generator = sync_client_series.series(limit=10, batch_size=3)
         ids = []
         count = 0
-        for id_ in generator.mint():
+        for id_ in generator:
             ids.append(id_)
             count += 1
             if count >= 5:  # Stop early to test streaming
@@ -105,7 +99,7 @@ class TestSyncSlugGenerator:
 
     def test_method_chaining(self, sync_client_series):
         """Test method chaining for configuration."""
-        generator = sync_client_series.mint.with_limit(10).with_batch_size(5)
+        generator = sync_client_series.series(limit=10, batch_size=5)
         assert generator._limit == 10
         assert generator._batch_size == 5
 
@@ -118,10 +112,10 @@ class TestSyncSlugGenerator:
     def test_slice_dry_run(self, sync_client_series):
         """Test slice (dry run) functionality."""
         # Get some IDs using slice starting from sequence 0
-        ids1 = sync_client_series.slice.starting_from(0)(count=3)
+        ids1 = sync_client_series.series.slice.starting_from(0)(count=3)
 
         # Get same sequence again - should be identical since it's dry run
-        ids2 = sync_client_series.slice.starting_from(0)(count=3)
+        ids2 = sync_client_series.series.slice.starting_from(0)(count=3)
 
         assert len(ids1) == 3
         assert len(ids2) == 3
@@ -129,7 +123,7 @@ class TestSyncSlugGenerator:
 
     def test_stats(self, sync_client_series):
         """Test getting generator statistics."""
-        stats = sync_client_series.mint.stats()
+        stats = sync_client_series.series.stats()
         assert isinstance(stats, list)
         assert len(stats) > 0
 
@@ -156,7 +150,7 @@ class TestSyncSlugGenerator:
     def test_reset(self, sync_client_series):
         """Test resetting the generator."""
         # Get initial stats
-        initial_stats = sync_client_series.mint.stats()
+        initial_stats = sync_client_series.series.stats()
 
         # Find the mint stats for total date_part
         initial_mint_stats = next(
@@ -166,10 +160,10 @@ class TestSyncSlugGenerator:
         initial_count = initial_mint_stats.total_count
 
         # Generate some IDs to increment counter
-        sync_client_series.mint(count=5)
+        sync_client_series.series.mint(count=5)
 
         # Check count increased (allow for potential caching/delay)
-        after_mint_stats = sync_client_series.mint.stats()
+        after_mint_stats = sync_client_series.series.stats()
         after_mint_item = next(
             (item for item in after_mint_stats if item.event_type == "mint" and item.date_part == "total"), None
         )
@@ -178,20 +172,20 @@ class TestSyncSlugGenerator:
         assert after_mint_item.total_count >= initial_count
 
         # Reset the generator - this should complete without error
-        sync_client_series.mint.reset()
+        sync_client_series.series.reset()
 
         # Verify reset completed by checking stats are still accessible
-        reset_stats = sync_client_series.mint.stats()
-        assert isinstance(reset_stats, list)
-        assert len(reset_stats) > 0
+        reset_info = sync_client_series.series.info()
+        assert isinstance(reset_info, SeriesInfo)
 
+        # assert reset_info.generated_count == "0"
         # Note: The reset operation may not immediately reset counters to 0
         # due to caching or different reset behavior than expected
         # The main test is that reset() completes without error
 
     def test_series_info(self, sync_client_series):
         """Test getting series information."""
-        series_info = sync_client_series.mint.series_info()
+        series_info = sync_client_series.series.info()
         assert isinstance(series_info, SeriesInfo)
 
         # Check that all expected attributes exist
@@ -278,7 +272,7 @@ class TestErrorHandling:
 
             # Test that 404 errors are raised properly
             with pytest.raises(httpx.HTTPStatusError) as exc_info:
-                sync_client_series.mint(count=1)
+                sync_client_series.series.mint(count=1)
 
             assert exc_info.value.response.status_code == 404
             assert "Not Found" in str(exc_info.value)
@@ -291,7 +285,7 @@ class TestErrorHandling:
             mock_http.return_value = mock_client
 
             with pytest.raises(httpx.ConnectError):
-                sync_client_series.mint()
+                sync_client_series.series.mint()
 
     def test_invalid_api_response(self, sync_client_series):
         """Test handling of invalid API responses."""
@@ -304,7 +298,7 @@ class TestErrorHandling:
             mock_http.return_value = mock_client
 
             with pytest.raises(ValueError, match="Invalid JSON"):
-                sync_client_series.mint()
+                sync_client_series.series.mint()
 
 
 class TestEdgeCases:
@@ -313,23 +307,23 @@ class TestEdgeCases:
     def test_zero_count_request(self, sync_client_series):
         """Test requesting zero IDs should fail with 400 error."""
         with pytest.raises(httpx.HTTPStatusError) as exc_info:
-            sync_client_series.mint(count=0)
+            sync_client_series.series.mint(count=0)
         assert exc_info.value.response.status_code == 400
 
     def test_large_batch_request(self, sync_client_series):
         """Test requesting a large batch of IDs."""
         # Note: This test might be slow, so we use a reasonable large number
         count = 100
-        ids = sync_client_series.mint(count=count)
+        ids = sync_client_series.series.mint(count=count)
         assert len(ids) == count
         assert len(set(ids)) == len(ids)  # All should be unique
 
     def test_streaming_with_small_batch_size(self, sync_client_series):
         """Test streaming with very small batch sizes."""
-        generator = sync_client_series.mint.with_limit(10).with_batch_size(1)
+        generator = sync_client_series.series(limit=10, batch_size=1)
         ids = []
 
-        for id_ in generator.mint():
+        for id_ in generator:
             ids.append(id_)
             if len(ids) >= 5:  # Stop early
                 break

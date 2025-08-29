@@ -3,8 +3,8 @@ import os
 import logging
 import functools
 
-from typing import Any, Self, Generator, Callable
-from .base import GeneratorBase, StatsItem, SeriesInfo
+from typing import Any, Generator, Callable
+from .base import ApiClientBase, GeneratorBase, StatsItem, SeriesInfo
 
 logger = logging.getLogger(__name__)
 
@@ -17,6 +17,7 @@ class SyncSlugGenerator(GeneratorBase):
         req = self._get_request(count)
         path = self._get_path()
 
+        self._logger.info(f"Requesting {count} slug(s)")
         response = self._http_client().post(
             path,
             json=req,
@@ -24,7 +25,7 @@ class SyncSlugGenerator(GeneratorBase):
         response.raise_for_status()
         return response.json()
 
-    def mint(self) -> Generator[str, Any, int]:
+    def stream(self) -> Generator[str, Any, int]:
         count = 0
         limit = self._limit
         batch_size = self._batch_size
@@ -38,7 +39,7 @@ class SyncSlugGenerator(GeneratorBase):
                     break
                 with self._http_client() as client:
                     req = self._get_request(batch_size, sequence)
-                    logger.info(f"Requesting batch of {batch_size} slugs")
+                    self._logger.info(f"Requesting batch of {batch_size} slug(s)")
                     with client.stream(
                         "POST",
                         path,
@@ -61,27 +62,12 @@ class SyncSlugGenerator(GeneratorBase):
                 raise Exception(f"Error: {e.response.text}")
             raise
         except KeyboardInterrupt:
-            return count
+            ...
+        self._logger.info(f"Generated {count} slugs")
         return count
 
-    def reset(self) -> None:
-        response = self._http_client().post(self.RESET_PATH)
-        response.raise_for_status()
-
-    def stats(self) -> list[StatsItem]:
-        response = self._http_client().get(self.STATS_PATH)
-        response.raise_for_status()
-        data = response.json()
-        return [StatsItem.from_dict(item) for item in data]
-
-    def series_info(self) -> SeriesInfo:
-        response = self._http_client().get(self.SERIES_INFO_PATH)
-        response.raise_for_status()
-        data = response.json()
-        return SeriesInfo.from_dict(data)
-
     def __iter__(self) -> Generator[str, None, None]:
-        return self.mint()
+        return self.stream()
 
 
 class RandomGenerator(GeneratorBase):
@@ -113,6 +99,56 @@ class RandomGenerator(GeneratorBase):
         return response.json()
 
 
+class SeriesClient(ApiClientBase):
+    def __init__(self, httpx_client: Callable[[], httpx.Client]):
+        super().__init__(httpx_client)
+
+    def __getitem__(self, series_slug: str) -> SyncSlugGenerator:
+        return self.mint.with_series(series_slug)
+
+    def __call__(
+        self,
+        *,
+        series_slug: str | None = None,
+        batch_size: int = ApiClientBase.DEFAULT_BATCH_SIZE,
+        limit: int | None = None,
+        dry_run: bool = False,
+        sequence: int = 0,
+    ) -> SyncSlugGenerator:
+        return SyncSlugGenerator(
+            self._http_client,
+            series_slug=series_slug,
+            batch_size=batch_size,
+            limit=limit,
+            dry_run=dry_run,
+            sequence=sequence,
+        )
+
+    @functools.cached_property
+    def mint(self) -> SyncSlugGenerator:
+        return self()
+
+    @functools.cached_property
+    def slice(self) -> SyncSlugGenerator:
+        return self(dry_run=True)
+
+    def stats(self) -> list[StatsItem]:
+        response = self._http_client().get(self.STATS_PATH)
+        response.raise_for_status()
+        data = response.json()
+        return [StatsItem.from_dict(item) for item in data]
+
+    def info(self) -> SeriesInfo:
+        response = self._http_client().get(self.SERIES_INFO_PATH)
+        response.raise_for_status()
+        data = response.json()
+        return SeriesInfo.from_dict(data)
+
+    def reset(self) -> None:
+        response = self._http_client().post(self.RESET_PATH)
+        response.raise_for_status()
+
+
 class SyncClient:
     def __init__(
         self,
@@ -141,23 +177,13 @@ class SyncClient:
         )
 
     @functools.cached_property
-    def mint(self) -> SyncSlugGenerator:
+    def series(self) -> SeriesClient:
         if not self._api_key:
-            raise ValueError("Mint API is available only for authenticated series")
-        return SyncSlugGenerator(self._http_client)
-
-    def __getitem__(self, series_slug: str) -> SyncSlugGenerator:
-        return self.mint.with_series(series_slug)
-
-    @functools.cached_property
-    def slice(self) -> SyncSlugGenerator:
-
-        if not self._api_key:
-            raise ValueError("Mint API is available only for authenticated series")
-        return SyncSlugGenerator(self._http_client).with_dry_run()
+            raise ValueError("API key is required")
+        return SeriesClient(self._http_client)
 
     @functools.cached_property
     def forge(self) -> RandomGenerator:
         if not self._api_key:
-            raise ValueError("Forge API is available only for authenticated series")
+            raise ValueError("API key is required")
         return RandomGenerator(self._http_client)

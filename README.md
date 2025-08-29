@@ -27,26 +27,26 @@ client = SyncClient(
 )
 
 # Generate a single ID
-id = client.mint()[0]
+id = client.series.mint()[0]
 
 # Generate multiple IDs
-ids = client.mint(count=5)
+ids = client.series.mint(count=5)
 
 # Get generator stats
-stats = client.mint.stats()
+stats = client.series.stats()
 
 # Get series information
-series_info = client.mint.series_info()
+series_info = client.series.info()
 
 # Reset the generator
-client.mint.reset()
+client.series.reset()
 ```
 
 ### Advanced Generator Configuration
 
 ```python
 # Configure generator with limits and batch sizes
-generator = client.mint.with_limit(100).with_batch_size(10)
+generator = client.series.mint.with_limit(100).with_batch_size(10)
 
 # Start from a specific sequence
 generator = generator.starting_from(1000)
@@ -80,7 +80,7 @@ ids = client.forge(
 
 ```python
 # Access a specific series
-series_generator = client["series-slug"]
+series_generator = client.series["series-slug"]
 
 # Generate IDs for specific series
 ids = series_generator(count=10)
@@ -108,19 +108,19 @@ async def main():
     )
 
     # Generate a single ID
-    id = await client.mint()[0]
+    id = await client.series.mint()[0]
 
     # Generate multiple IDs
-    ids = await client.mint(count=5)
+    ids = await client.series.mint(count=5)
 
     # Get generator stats
-    stats = await client.mint.stats()
+    stats = await client.series.stats()
 
     # Get series information
-    series_info = await client.mint.series_info()
+    series_info = await client.series.info()
 
     # Reset the generator
-    await client.mint.reset()
+    await client.series.reset()
 
     # Test a pattern
     ids = await client.forge(
@@ -131,7 +131,7 @@ async def main():
     )
 
     # Stream IDs asynchronously
-    async for id in client.mint:
+    async for id in client.series.mint:
         print(id)
 
 # Run the async code
@@ -219,7 +219,7 @@ Represents generator statistics:
 ```python
 from slugkit.base import StatsItem
 
-stats = client.mint.stats()
+stats = client.series.stats()
 for item in stats:
     print(f"Event: {item.event_type}")
     print(f"Total Count: {item.total_count}")
@@ -234,7 +234,7 @@ Represents series information:
 ```python
 from slugkit.base import SeriesInfo
 
-series_info = client.mint.series_info()
+series_info = client.series.info()
 print(f"Pattern: {series_info.pattern}")
 print(f"Capacity: {series_info.capacity}")
 print(f"Generated: {series_info.generated_count}")
@@ -288,7 +288,7 @@ The SDK provides comprehensive error handling:
 import httpx
 
 try:
-    ids = client.mint(count=10)
+    ids = client.series.mint(count=10)
 except httpx.HTTPStatusError as e:
     if e.response.status_code == 400:
         print(f"Bad request: {e.response.text}")
@@ -312,15 +312,13 @@ The SDK supports SlugKit's pattern language for generating structured IDs:
 - `{noun}` - Random noun  
 - `{adverb}` - Random adverb
 - `{verb}` - Random verb
-- `{color}` - Random color
-- `{animal}` - Random animal
 
 ### Number Generators
 
 - `{number:3d}` - 3-digit decimal number
 - `{number:4,hex}` - 4-character hexadecimal
-- `{number:2,oct}` - 2-character octal
-- `{number:6,bin}` - 6-character binary
+- `{number:2r}` - up to 2-character roman number, lowercase
+- `{number:6R}` - up to 6-character roman number, uppercase
 
 ### Examples
 
