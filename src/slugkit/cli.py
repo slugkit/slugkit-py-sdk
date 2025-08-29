@@ -8,7 +8,8 @@ import uuid
 from enum import Enum
 
 from slugkit import SyncClient
-from slugkit.sync_client import PatternTester
+from slugkit.sync_client import RandomGenerator
+from slugkit.base import StatsItem, SeriesInfo
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -49,8 +50,8 @@ def callback(
         envvar="SLUGKIT_BASE_URL",
         help="The base URL of the SlugKit API.",
     ),
-    api_key: str | None = typer.Option(
-        None,
+    api_key: str = typer.Option(
+        ...,
         envvar="SLUGKIT_API_KEY",
         help="The API key for the SlugKit API.",
     ),
@@ -70,7 +71,7 @@ def callback(
 
 
 @app.command()
-def pattern_test(
+def forge(
     pattern: str = typer.Argument(..., help="The slug pattern to test."),
     *,
     seed: str | None = typer.Option(None, "--seed", "-s", help="The seed to use for the random number generator."),
@@ -80,19 +81,13 @@ def pattern_test(
     count: int = typer.Option(1, "--count", "-c", help="The number of human-readable IDs to generate."),
 ):
     """
-    Get a list of human-readable IDs for a given pattern.
-
-    Args:
-        pattern: The pattern to test.
-        seed: The seed to use for the random number generator.
-        sequense: The sequence number to use for the random number generator.
-        count: The number of human-readable IDs to generate.
+    Get a list of slugs for a given pattern.
     """
     if seed is None:
         seed = str(uuid.uuid4())
     client = SyncClient(app_context.base_url, app_context.api_key)
     try:
-        result = client.test(pattern, seed=seed, sequence=sequence, count=count)
+        result = client.forge(pattern, seed=seed, sequence=sequence, count=count)
     except httpx.HTTPStatusError as e:
         logger.error(f"Failed to test pattern: {e.response.text}")
         raise typer.Exit(1)
@@ -104,23 +99,23 @@ def pattern_test(
 
 
 @app.command()
-def next(
-    count: int = typer.Argument(1, help="The number of human-readable IDs to generate."),
-    batch_size: int = typer.Option(
-        10, "--batch-size", "-b", help="The number of human-readable IDs to generate in a batch."
-    ),
+def mint(
+    count: int = typer.Argument(1, help="The number of slugs to generate."),
+    batch_size: int = typer.Option(1000, "--batch-size", "-b", help="Size of a batch to fetch at once."),
 ):
     """
-    Generate next batch of human-readable IDs for the project defined by
-    the API key.
+    Generate next batch of slugs for the series defined by the API key.
 
-    If the output format is JSON, the result will be a list of human-readable IDs.
-    Otherwise, the result will be a stream of human-readable IDs.
+    Generating slugs will bump the series counter. Slugs may be generated
+    concurrently and will not collide.
+
+    If the output format is JSON, the result will be a list of slugs.
+    Otherwise, the result will be a stream of slugs.
     Default output format is text.
     """
     logger.info(f"Generating {count} human-readable IDs at {app_context.base_url}")
     client = SyncClient(app_context.base_url, app_context.api_key)
-    gen = client.generator
+    gen = client.mint
     if count > 1:
         gen = gen.with_limit(count).with_batch_size(batch_size)
         if app_context.output_format == OutputFormat.JSON:
@@ -138,18 +133,17 @@ def next(
 
 
 @app.command()
-def nth(
+def slice(
     sequence: int = typer.Argument(0, help="The sequence number to start from."),
-    count: int = typer.Argument(1, help="The number of human-readable IDs to generate."),
-    batch_size: int = typer.Option(
-        10, "--batch-size", "-b", help="The number of human-readable IDs to generate in a batch."
-    ),
+    count: int = typer.Argument(1, help="The number of slugs to generate."),
+    batch_size: int = typer.Option(1000, "--batch-size", "-b", help="Size of a batch to fetch at once."),
 ):
     """
-    Generate human-readable IDs from a given sequence number.
+    Generate slugs starting from a given sequence number.
+    Series counters are not bumped.
     """
     client = SyncClient(app_context.base_url, app_context.api_key)
-    gen = client.generator.with_dry_run(True).starting_from(sequence)
+    gen = client.slice.starting_from(sequence)
     if count > 1:
         gen = gen.with_limit(count).with_batch_size(batch_size)
         if app_context.output_format == OutputFormat.JSON:
@@ -173,18 +167,49 @@ def stats():
     """
     client = SyncClient(app_context.base_url, app_context.api_key)
     try:
-        stats = client.generator.stats()
+        stats_items = client.mint.stats()
         if app_context.output_format == OutputFormat.JSON:
-            print(json.dumps(stats, indent=2))
+            # Convert StatsItem objects to dictionaries for JSON serialization
+            stats_dicts = [item.to_dict() for item in stats_items]
+            print(json.dumps(stats_dicts, indent=2))
         else:
-            caption_width = 20
-            print(f"{'Project name':<{caption_width}}: {stats['name']}")
-            print(f"{'Project slug':<{caption_width}}: {stats['slug']}")
-            print(f"{'Pattern':<{caption_width}}: {stats['pattern']}")
-            print(f"{'Capacity':<{caption_width}}: {stats['capacity']}")
-            print(f"{'Generated IDs':<{caption_width}}: {stats['generated_ids_count']}")
+            caption_width = 25
+            for item in stats_items:
+                print(f"{'Event Type':<{caption_width}}: {item.event_type}")
+                print(f"{'Date Part':<{caption_width}}: {item.date_part}")
+                print(f"{'Total Count':<{caption_width}}: {item.total_count}")
+                print(f"{'Request Count':<{caption_width}}: {item.request_count}")
+                print(f"{'Total Duration (μs)':<{caption_width}}: {item.total_duration_us}")
+                print(f"{'Avg Duration (μs)':<{caption_width}}: {item.avg_duration_us}")
+                print("-" * 50)
     except httpx.HTTPStatusError as e:
         logger.error(f"Failed to get stats: {e.response.text}")
+        raise typer.Exit(1)
+
+
+@app.command()
+def series_info():
+    """
+    Get information about the current series.
+    """
+    client = SyncClient(app_context.base_url, app_context.api_key)
+    try:
+        series_info = client.mint.series_info()
+        if app_context.output_format == OutputFormat.JSON:
+            # Convert SeriesInfo object to dictionary for JSON serialization
+            series_dict = series_info.to_dict()
+            print(json.dumps(series_dict, indent=2))
+        else:
+            caption_width = 25
+            print(f"{'Series Slug':<{caption_width}}: {series_info.slug}")
+            print(f"{'Organization Slug':<{caption_width}}: {series_info.org_slug}")
+            print(f"{'Pattern':<{caption_width}}: {series_info.pattern}")
+            print(f"{'Max Pattern Length':<{caption_width}}: {series_info.max_pattern_length}")
+            print(f"{'Capacity':<{caption_width}}: {series_info.capacity}")
+            print(f"{'Generated Count':<{caption_width}}: {series_info.generated_count}")
+            print(f"{'Last Modified':<{caption_width}}: {series_info.mtime}")
+    except httpx.HTTPStatusError as e:
+        logger.error(f"Failed to get series info: {e.response.text}")
         raise typer.Exit(1)
 
 
@@ -196,7 +221,7 @@ def reset():
     try:
         logger.warning(f"Resetting generator at {app_context.base_url}")
         client = SyncClient(app_context.base_url, app_context.api_key)
-        client.generator.reset()
+        client.mint.reset()
         logger.info("Generator reset")
     except httpx.HTTPStatusError as e:
         logger.error(f"Failed to reset generator: {e.response.text}")

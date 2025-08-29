@@ -4,73 +4,18 @@ import logging
 import functools
 
 from typing import Any, Self, Generator, Callable
+from .base import GeneratorBase, StatsItem, SeriesInfo
 
-logger = logging.getLogger(__file__)
+logger = logging.getLogger(__name__)
 
 
-class SyncSlugGenerator:
-    def __init__(
-        self,
-        http_client: Callable[[], httpx.Client],
-        *,
-        batch_size: int = 10,
-        limit: int | None = None,
-        dry_run: bool = False,
-        sequence: int = 0,
-    ):
-        self._http_client = http_client
-        self._batch_size = batch_size
-        self._limit = limit
-        self._dry_run = dry_run
-        self._sequence = sequence
-
-    def with_batch_size(self, batch_size: int) -> Self:
-        return SyncSlugGenerator(
-            self._http_client,
-            batch_size=batch_size,
-            limit=self._limit,
-            dry_run=self._dry_run,
-            sequence=self._sequence,
-        )
-
-    def with_limit(self, limit: int) -> Self:
-        return SyncSlugGenerator(
-            self._http_client,
-            batch_size=self._batch_size,
-            limit=limit,
-            dry_run=self._dry_run,
-            sequence=self._sequence,
-        )
-
-    def with_dry_run(self, dry_run: bool) -> Self:
-        return SyncSlugGenerator(
-            self._http_client,
-            batch_size=self._batch_size,
-            limit=self._limit,
-            dry_run=dry_run,
-            sequence=self._sequence,
-        )
-
-    def starting_from(self, sequence: int) -> Self:
-        return SyncSlugGenerator(
-            self._http_client,
-            batch_size=self._batch_size,
-            limit=self._limit,
-            dry_run=self._dry_run,
-            sequence=sequence,
-        )
-
+class SyncSlugGenerator(GeneratorBase):
     def __call__(
         self,
         count: int = 1,
     ) -> list[str]:
-        req = {}
-        path = "/generate"
-        if count:
-            req["count"] = count
-        if self._dry_run:
-            req["sequence"] = self._sequence
-            path = "/nth"
+        req = self._get_request(count)
+        path = self._get_path()
 
         response = self._http_client().post(
             path,
@@ -79,57 +24,67 @@ class SyncSlugGenerator:
         response.raise_for_status()
         return response.json()
 
-    # TODO Maybe a stop signal?
-    # TODO Maybe returne number of slugs generated?
-    def generate(self) -> Generator[str, Any, int]:
+    def mint(self) -> Generator[str, Any, int]:
         count = 0
         limit = self._limit
         batch_size = self._batch_size
-        path = "/generate/stream"
+        path = self._get_path(stream=True)
         sequence = self._sequence
-        if self._dry_run:
-            path = "/nth/stream"
-        while True:
-            if limit is not None:
-                batch_size = min(batch_size, limit - count)
-            if batch_size <= 0:
-                break
-            with self._http_client() as client:
-                if not self._dry_run:
-                    req = {"count": batch_size}
-                else:
-                    req = {"count": batch_size, "sequence": sequence}
-                with client.stream(
-                    "POST",
-                    path,
-                    json=req,
-                ) as response:
-                    response.raise_for_status()
+        try:
+            while True:
+                if limit is not None:
+                    batch_size = min(batch_size, limit - count)
+                if batch_size <= 0:
+                    break
+                with self._http_client() as client:
+                    req = self._get_request(batch_size, sequence)
+                    logger.info(f"Requesting batch of {batch_size} slugs")
+                    with client.stream(
+                        "POST",
+                        path,
+                        json=req,
+                    ) as response:
+                        response.raise_for_status()
 
-                    for val in response.iter_lines():
-                        stop = yield val.strip()
-                        count += 1
-                        if stop is not None:
-                            break
-                        if limit is not None and count >= limit:
-                            break
-            sequence += batch_size
+                        for val in response.iter_lines():
+                            stop = yield val.strip()
+                            count += 1
+                            if stop is not None:
+                                break
+                            if limit is not None and count >= limit:
+                                break
+                sequence += batch_size
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 404:
+                e.response.read()
+                logger.error(f"Error: {e.response.text}")
+                raise Exception(f"Error: {e.response.text}")
+            raise
+        except KeyboardInterrupt:
+            return count
         return count
 
     def reset(self) -> None:
-        response = self._http_client().post("/reset")
+        response = self._http_client().post(self.RESET_PATH)
         response.raise_for_status()
 
-    def stats(self) -> dict[str, Any]:
-        response = self._http_client().get("/stats")
+    def stats(self) -> list[StatsItem]:
+        response = self._http_client().get(self.STATS_PATH)
         response.raise_for_status()
-        return response.json()
+        data = response.json()
+        return [StatsItem.from_dict(item) for item in data]
+
+    def series_info(self) -> SeriesInfo:
+        response = self._http_client().get(self.SERIES_INFO_PATH)
+        response.raise_for_status()
+        data = response.json()
+        return SeriesInfo.from_dict(data)
 
     def __iter__(self) -> Generator[str, None, None]:
-        return self.generate()
+        return self.mint()
 
 
-class PatternTester:
+class RandomGenerator(GeneratorBase):
     def __init__(self, http_client: Callable[[], httpx.Client]):
         self._http_client = http_client
 
@@ -151,7 +106,7 @@ class PatternTester:
         if count:
             req["count"] = count
         response = self._http_client().post(
-            "/generator/test",
+            self.FORGE_PATH,
             json=req,
         )
         response.raise_for_status()
@@ -186,11 +141,23 @@ class SyncClient:
         )
 
     @functools.cached_property
-    def generator(self) -> SyncSlugGenerator:
+    def mint(self) -> SyncSlugGenerator:
         if not self._api_key:
-            raise ValueError("Generator API is available only for authenticated projects")
+            raise ValueError("Mint API is available only for authenticated series")
         return SyncSlugGenerator(self._http_client)
 
+    def __getitem__(self, series_slug: str) -> SyncSlugGenerator:
+        return self.mint.with_series(series_slug)
+
     @functools.cached_property
-    def test(self) -> PatternTester:
-        return PatternTester(self._http_client)
+    def slice(self) -> SyncSlugGenerator:
+
+        if not self._api_key:
+            raise ValueError("Mint API is available only for authenticated series")
+        return SyncSlugGenerator(self._http_client).with_dry_run()
+
+    @functools.cached_property
+    def forge(self) -> RandomGenerator:
+        if not self._api_key:
+            raise ValueError("Forge API is available only for authenticated series")
+        return RandomGenerator(self._http_client)
