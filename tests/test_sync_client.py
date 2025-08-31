@@ -2,8 +2,8 @@ import pytest
 import httpx
 from unittest.mock import Mock, patch
 from slugkit import SyncClient
-from slugkit.sync_client import SyncSlugGenerator, RandomGenerator
-from slugkit.base import StatsItem, SeriesInfo
+from slugkit.sync_client import SyncSlugGenerator, RandomGenerator, SeriesClient
+from slugkit.base import StatsItem, SeriesInfo, PatternInfo, DictionaryInfo, DictionaryTag
 
 
 class TestSyncClient:
@@ -47,9 +47,61 @@ class TestSyncClient:
 
     def test_series_access_bracket_notation(self, sync_client_series):
         """Test accessing series using bracket notation."""
-        series_gen = sync_client_series.series["test-series"]
-        assert isinstance(series_gen, SyncSlugGenerator)
-        assert series_gen._series_slug == "test-series"
+        series_client = sync_client_series.series["test-series"]
+        assert isinstance(series_client, SeriesClient)
+        assert series_client._series == "test-series"
+
+    def test_ping_success(self, sync_client_series):
+        """Test successful ping to the API."""
+        # This should work with a valid client
+        sync_client_series.ping()
+        # If we get here without exception, ping succeeded
+
+    def test_ping_without_api_key(self, base_url):
+        """Test ping fails without API key."""
+        client = SyncClient(base_url=base_url)
+        with pytest.raises(TypeError, match="Header value must be str or bytes, not <class 'NoneType'>"):
+            client.ping()
+
+    def test_key_info_success(self, sync_client_series):
+        """Test successful key info retrieval."""
+        key_info = sync_client_series.key_info()
+
+        # Verify the structure of KeyInfo
+        assert hasattr(key_info, "type")
+        assert hasattr(key_info, "key_scope")
+        assert hasattr(key_info, "slug")
+        assert hasattr(key_info, "org_slug")
+        assert hasattr(key_info, "series_slug")
+        assert hasattr(key_info, "scopes")
+        assert hasattr(key_info, "enabled")
+
+        # Verify key is enabled
+        assert key_info.enabled is True
+
+        # Verify scopes contain expected operations
+        expected_scopes = ["forge", "mint", "slice", "reset", "stats"]
+        for scope in expected_scopes:
+            assert scope in key_info.scopes
+
+    def test_key_info_without_api_key(self, base_url):
+        """Test key info fails without API key."""
+        client = SyncClient(base_url=base_url)
+        with pytest.raises(TypeError, match="Header value must be str or bytes, not <class 'NoneType'>"):
+            client.key_info()
+
+    def test_key_info_scope_validation(self, sync_client_series):
+        """Test that key info returns valid scope values."""
+        key_info = sync_client_series.key_info()
+
+        # Verify key_scope is one of the expected values
+        assert key_info.key_scope.value in ["org", "series"]
+
+        # Verify slug is not empty
+        assert len(key_info.slug) > 0
+
+        # Verify org_slug is not empty
+        assert len(key_info.org_slug) > 0
 
 
 class TestSyncSlugGenerator:
@@ -78,7 +130,8 @@ class TestSyncSlugGenerator:
         """Test generating IDs for a specific series."""
         # Use the series slug from the fixture instead of hardcoded series
         series_slug = "whole-blond-rower-a597"
-        ids = sync_client_org.series[series_slug](count=3)
+        series_client = sync_client_org.series[series_slug]
+        ids = series_client.mint(count=3)
         assert isinstance(ids, list)
         assert len(ids) == 3
 
@@ -215,6 +268,17 @@ class TestSyncSlugGenerator:
         assert len(series_info.generated_count) > 0
         assert len(series_info.mtime) > 0
 
+    def test_series_list(self, sync_client_series):
+        """Test getting series list."""
+        series_list = sync_client_series.series.list()
+
+        assert isinstance(series_list, list)
+        assert len(series_list) > 0
+
+        for series in series_list:
+            assert isinstance(series, str)
+            assert len(series) > 0
+
 
 class TestRandomGenerator:
     """Tests for the RandomGenerator class."""
@@ -249,6 +313,71 @@ class TestRandomGenerator:
         ids = sync_client_series.forge(pattern=pattern, count=2)
         assert isinstance(ids, list)
         assert len(ids) == 2
+
+    def test_pattern_info(self, sync_client_series):
+        """Test getting pattern information."""
+        pattern = "test-{adjective}-{noun}-{number:3d}"
+        pattern_info = sync_client_series.forge.pattern_info(pattern)
+
+        assert isinstance(pattern_info, PatternInfo)
+
+        # Check that all expected attributes exist
+        assert hasattr(pattern_info, "pattern")
+        assert hasattr(pattern_info, "capacity")
+        assert hasattr(pattern_info, "max_slug_length")
+        assert hasattr(pattern_info, "complexity")
+        assert hasattr(pattern_info, "components")
+
+        # Check data types
+        assert isinstance(pattern_info.pattern, str)
+        assert isinstance(pattern_info.capacity, str)
+        assert isinstance(pattern_info.max_slug_length, int)
+        assert isinstance(pattern_info.complexity, int)
+        assert isinstance(pattern_info.components, int)
+
+        # Check that values are not empty
+        assert len(pattern_info.pattern) > 0
+        assert len(pattern_info.capacity) > 0
+        assert pattern_info.max_slug_length > 0
+        assert pattern_info.complexity >= 0
+        assert pattern_info.components > 0
+
+    def test_dictionary_info(self, sync_client_series):
+        """Test getting dictionary information."""
+        dict_info = sync_client_series.forge.dictionary_info()
+
+        assert isinstance(dict_info, list)
+        assert len(dict_info) > 0
+
+        for item in dict_info:
+            assert isinstance(item, DictionaryInfo)
+            assert hasattr(item, "kind")
+            assert hasattr(item, "count")
+            assert isinstance(item.kind, str)
+            assert isinstance(item.count, int)
+            assert len(item.kind) > 0
+            assert item.count >= 0
+
+    def test_dictionary_tags(self, sync_client_series):
+        """Test getting dictionary tags."""
+        dict_tags = sync_client_series.forge.dictionary_tags()
+
+        assert isinstance(dict_tags, list)
+        assert len(dict_tags) > 0
+
+        for item in dict_tags:
+            assert isinstance(item, DictionaryTag)
+            assert hasattr(item, "kind")
+            assert hasattr(item, "tag")
+            assert hasattr(item, "description")
+            assert hasattr(item, "opt_in")
+            assert hasattr(item, "word_count")
+            assert isinstance(item.kind, str)
+            assert isinstance(item.tag, str)
+            assert isinstance(item.word_count, int)
+            assert len(item.kind) > 0
+            assert len(item.tag) > 0
+            assert item.word_count >= 0
 
 
 class TestErrorHandling:

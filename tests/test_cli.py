@@ -7,7 +7,7 @@ import pytest
 from typer.testing import CliRunner
 
 from slugkit.cli import app
-from slugkit.base import StatsItem, SeriesInfo
+from slugkit.base import StatsItem, SeriesInfo, PatternInfo, DictionaryInfo, DictionaryTag
 
 runner = CliRunner()
 
@@ -122,5 +122,52 @@ def test_cli_series_info(monkeypatch):
     assert isinstance(data, dict)
     # Check for expected keys in JSON output
     expected_keys = ["slug", "org_slug", "pattern", "max_pattern_length", "capacity", "generated_count", "mtime"]
+    for key in expected_keys:
+        assert key in data
+
+
+def test_cli_series_list(monkeypatch):
+    """Test the series-list CLI command."""
+    # Test text output
+    result_text = runner.invoke(app, ["series-list"])  # text output
+    assert result_text.exit_code == 0
+    # Check that we get a list of series
+    lines = result_text.output.strip().splitlines()
+    assert len(lines) > 0
+    # Each line should be a series slug
+    for line in lines:
+        assert len(line) > 0
+
+    # Test JSON output
+    result_json = runner.invoke(app, ["-o", "json", "series-list"])  # JSON output
+    assert result_json.exit_code == 0
+    data = json.loads(result_json.output)
+    assert isinstance(data, list)
+    assert len(data) > 0
+    # Each item should be a string (series slug)
+    for item in data:
+        assert isinstance(item, str)
+        assert len(item) > 0
+
+
+def test_cli_validate(monkeypatch):
+    """Test the validate CLI command."""
+    # Test text output
+    result_text = runner.invoke(app, ["validate", "test-{adjective}-{noun}"])  # text output
+    assert result_text.exit_code == 0
+    # Check for expected fields in text output
+    assert "Pattern" in result_text.output
+    assert "Capacity" in result_text.output
+    assert "Max Slug Length" in result_text.output
+    assert "Complexity" in result_text.output
+    assert "Components" in result_text.output
+
+    # Test JSON output
+    result_json = runner.invoke(app, ["-o", "json", "validate", "test-{adjective}-{noun}"])  # JSON output
+    assert result_json.exit_code == 0
+    data = json.loads(result_json.output)
+    assert isinstance(data, dict)
+    # Check for expected keys in JSON output
+    expected_keys = ["pattern", "capacity", "max_slug_length", "complexity", "components"]
     for key in expected_keys:
         assert key in data

@@ -146,3 +146,128 @@ export SLUGKIT_API_KEY="your-api-key"
 **Authentication**: All authenticated endpoints require an API key. The SDK validates API key presence for operations that require it and provides clear error messages when missing.
 
 **Dry Run Mode**: The "slice" functionality allows generating IDs from specific sequences without incrementing the project counter, useful for testing and previews.
+
+## MCP Server Architecture
+
+**MCP (Model Context Protocol) Server**: The SDK includes a comprehensive MCP server that enables AI assistants to generate guaranteed-unique identifiers. This solves the fundamental problem that AI cannot generate truly unique strings due to lack of persistence, coordination, and sequential awareness.
+
+### MCP Server Components
+
+**Server Implementation**: Located at `src/slugkit/mcp/server.py`
+- Built using `fastmcp` framework for robust MCP protocol handling
+- Supports both `stdio` and `http` transports
+- Comprehensive logging and error handling
+- Async/await architecture for high performance
+
+**Tool Architecture**: The MCP server exposes SlugKit functionality through well-defined tools:
+- **Core Generation Tools**: `forge`, `mint`, `slice` for different ID generation scenarios
+- **Analysis Tools**: `validate_pattern`, `analyze_pattern`, `compare_patterns` for pattern evaluation
+- **Information Tools**: `dictionary_info`, `series_info`, `key_info`, `stats` for discovery and monitoring
+- **Management Tools**: `reset`, `ping` for administration and health checks
+- **Documentation Tools**: `list_help_topics`, `get_help_topic` for inline help
+
+**Resource System**: Provides access to documentation and pattern syntax through MCP resources:
+- Pattern syntax EBNF grammar
+- Help documentation and examples
+- Best practices guides
+
+### Key Design Patterns
+
+**Context Management**: Uses FastMCP's context system for request lifecycle management:
+```python
+@asynccontextmanager
+async def app_lifespan(app: FastMCP) -> AsyncIterator[AppContext]:
+    # Manage global application state and client instances
+```
+
+**Client Factory Pattern**: Dynamic client creation per request:
+```python
+def get_client_for_session(ctx: Context["AppContext", ServerSession]) -> AsyncClient:
+    # Creates properly authenticated client for each MCP session
+```
+
+**Tool Composition**: Each tool follows consistent patterns:
+- Context injection for session management
+- Comprehensive error handling and logging
+- Input validation and transformation
+- Structured response formatting
+
+### Deployment Options
+
+**Cloud Instance (Recommended)**:
+- Hosted at `https://dev.slugkit.dev/api/v1/mcp`
+- No local installation required
+- Always up-to-date with latest features
+- Uses `mcp-remote` bridge for MCP client compatibility
+
+**Local Packaged Installation**:
+```bash
+pip install slugkit-py-sdk
+slugkit-mcp
+```
+- Entry point: `slugkit-mcp` command
+- Configurable via environment variables
+- Supports debug logging and custom transports
+
+**Development Setup**:
+```bash
+uv run slugkit-mcp
+```
+- Run directly from source tree
+- Full development environment
+- Hot reloading during development
+
+### Available MCP Tools
+
+**Generation Tools**:
+- `forge(pattern, seed, sequence, count)` - Generate IDs from custom patterns
+- `mint(series_slug, count, batch_size)` - Generate sequential IDs from series
+- `slice(series_slug, count, batch_size, sequence)` - Preview IDs without consuming
+
+**Analysis Tools**:
+- `validate_pattern(pattern)` - Validate pattern syntax and get metadata
+- `analyze_pattern(pattern)` - Deep analysis of pattern capacity and complexity
+- `compare_patterns(patterns, count_per_pattern, seed)` - Side-by-side pattern comparison
+
+**Information Tools**:
+- `dictionary_info()` - Available word dictionaries and counts
+- `dictionary_tags()` - Word filtering tags and content ratings
+- `series_list()` - Available series in organization
+- `series_info(series_slug)` - Detailed series information
+- `key_info()` - API key capabilities and permissions
+- `stats(series_slug)` - Usage and performance statistics
+
+**Management Tools**:
+- `reset(series_slug)` - Reset series (development/testing)
+- `ping()` - Health check and connectivity test
+
+**Documentation Tools**:
+- `list_help_topics()` - Available documentation topics
+- `get_help_topic(topic)` - Retrieve specific documentation
+
+### Configuration and Environment
+
+**Environment Variables**:
+```bash
+export SLUGKIT_BASE_URL="https://dev.slugkit.dev/api/v1"
+export SLUGKIT_API_KEY="your-api-key"
+```
+
+**Command Line Options**:
+```bash
+slugkit-mcp --log-level DEBUG --transport http --host 0.0.0.0 --port 5000
+```
+
+**MCP Client Configuration**:
+```json
+{
+    "mcpServers": {
+        "SlugKit": {
+            "command": "slugkit-mcp",
+            "env": {
+                "SLUGKIT_API_KEY": "your-api-key"
+            }
+        }
+    }
+}
+```

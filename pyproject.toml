@@ -23,6 +23,7 @@ dependencies = [
     "python-dotenv>=1.0.1",
     "typer>=0.16.0",
     "pydantic>=2.7.0",
+    "mcp>=1.6.0",   
 ]
 
 [dependency-groups]
@@ -58,6 +59,7 @@ package = true
 
 [project.scripts]
 slugkit = "slugkit.cli:main"
+slugkit-mcp = "slugkit.mcp.server:main"
 
 [tool.distutils]
 index-servers = ["pypi", "testpypi"]
