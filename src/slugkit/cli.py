@@ -1,3 +1,4 @@
+import time
 import typer
 import dotenv
 import httpx
@@ -9,7 +10,8 @@ from enum import Enum
 
 from slugkit import SyncClient
 from slugkit.sync_client import RandomGenerator
-from slugkit.base import StatsItem, SeriesInfo
+from slugkit.base import StatsItem, SeriesInfo, DEFAULT_BATCH_SIZE
+from slugkit.package_data import list_package_files, get_package_data
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -71,6 +73,70 @@ def callback(
 
 
 @app.command()
+def ping():
+    """
+    Ping the SlugKit API.
+    """
+    try:
+        client = SyncClient(app_context.base_url, app_context.api_key)
+        start_time = time.time()
+        client.ping()
+        end_time = time.time()
+        logger.info(f"Ping successful in {end_time - start_time:.2f} seconds")
+    except httpx.HTTPStatusError as e:
+        logger.error(f"Failed to ping: {e.response.text}")
+        raise typer.Exit(1)
+
+
+@app.command()
+def key_info():
+    """
+    Get information about the current key.
+    """
+    client = SyncClient(app_context.base_url, app_context.api_key)
+    try:
+        key_info = client.key_info()
+        if app_context.output_format == OutputFormat.JSON:
+            print(json.dumps(key_info.to_dict(), indent=2))
+        else:
+            caption_width = 25
+            print(f"{'Type':<{caption_width}}: {key_info.type}")
+            print(f"{'Key Scope':<{caption_width}}: {key_info.key_scope.value}")
+            print(f"{'Slug':<{caption_width}}: {key_info.slug}")
+            print(f"{'Org Slug':<{caption_width}}: {key_info.org_slug}")
+            print(f"{'Series Slug':<{caption_width}}: {key_info.series_slug}")
+            print(f"{'Scopes':<{caption_width}}: {key_info.scopes}")
+            print(f"{'Enabled':<{caption_width}}: {key_info.enabled}")
+    except httpx.HTTPStatusError as e:
+        logger.error(f"Failed to get key info: {e.response.text}")
+        raise typer.Exit(1)
+
+
+@app.command()
+def pattern_info(
+    pattern: str = typer.Argument(..., help="The pattern to get information about."),
+):
+    """
+    Get information about a pattern.
+    """
+    client = SyncClient(app_context.base_url, app_context.api_key)
+    try:
+        pattern_info = client.forge.pattern_info(pattern)
+        if app_context.output_format == OutputFormat.JSON:
+            print(json.dumps(pattern_info.to_dict(), indent=2))
+        else:
+            caption_width = 25
+            print(f"{'Pattern':<{caption_width}}: {pattern_info.pattern}")
+            print(f"{'Capacity':<{caption_width}}: {pattern_info.capacity}")
+            print(f"{'Max Slug Length':<{caption_width}}: {pattern_info.max_slug_length}")
+            print(f"{'Complexity':<{caption_width}}: {pattern_info.complexity}")
+            print(f"{'Components':<{caption_width}}: {pattern_info.components}")
+    except httpx.HTTPStatusError as e:
+        logger.error(f"Failed to get pattern info: {e.response.text}")
+        raise typer.Exit(1)
+
+
+@app.command()
 def forge(
     pattern: str = typer.Argument(..., help="The slug pattern to test."),
     *,
@@ -101,7 +167,8 @@ def forge(
 @app.command()
 def mint(
     count: int = typer.Argument(1, help="The number of slugs to generate."),
-    batch_size: int = typer.Option(1000, "--batch-size", "-b", help="Size of a batch to fetch at once."),
+    batch_size: int = typer.Option(DEFAULT_BATCH_SIZE, "--batch-size", "-b", help="Size of a batch to fetch at once."),
+    series: str | None = typer.Option(None, "--series", "-s", help="The series to use for the slugs."),
 ):
     """
     Generate next batch of slugs for the series defined by the API key.
@@ -115,6 +182,10 @@ def mint(
     """
     logger.info(f"Generating {count} human-readable IDs at {app_context.base_url}")
     client = SyncClient(app_context.base_url, app_context.api_key)
+    if series:
+        client = client.series[series]
+    else:
+        client = client.series
     gen = client.mint
     if count > 1:
         gen = gen.with_limit(count).with_batch_size(batch_size)
@@ -136,13 +207,18 @@ def mint(
 def slice(
     sequence: int = typer.Argument(0, help="The sequence number to start from."),
     count: int = typer.Argument(1, help="The number of slugs to generate."),
-    batch_size: int = typer.Option(1000, "--batch-size", "-b", help="Size of a batch to fetch at once."),
+    batch_size: int = typer.Option(DEFAULT_BATCH_SIZE, "--batch-size", "-b", help="Size of a batch to fetch at once."),
+    series: str | None = typer.Option(None, "--series", "-s", help="The series to use for the slugs."),
 ):
     """
     Generate slugs starting from a given sequence number.
     Series counters are not bumped.
     """
     client = SyncClient(app_context.base_url, app_context.api_key)
+    if series:
+        client = client.series[series]
+    else:
+        client = client.series
     gen = client.slice.starting_from(sequence)
     if count > 1:
         gen = gen.with_limit(count).with_batch_size(batch_size)
@@ -161,13 +237,19 @@ def slice(
 
 
 @app.command()
-def stats():
+def stats(
+    series: str | None = typer.Option(None, "--series", "-s", help="The series to use for the stats."),
+):
     """
     Get the stats of the generator.
     """
     client = SyncClient(app_context.base_url, app_context.api_key)
+    if series:
+        client = client.series[series]
+    else:
+        client = client.series
     try:
-        stats_items = client.mint.stats()
+        stats_items = client.stats()
         if app_context.output_format == OutputFormat.JSON:
             # Convert StatsItem objects to dictionaries for JSON serialization
             stats_dicts = [item.to_dict() for item in stats_items]
@@ -188,13 +270,19 @@ def stats():
 
 
 @app.command()
-def series_info():
+def series_info(
+    series: str | None = typer.Option(None, "--series", "-s", help="The series to use for the info."),
+):
     """
     Get information about the current series.
     """
     client = SyncClient(app_context.base_url, app_context.api_key)
+    if series:
+        client = client.series[series]
+    else:
+        client = client.series
     try:
-        series_info = client.mint.series_info()
+        series_info = client.info()
         if app_context.output_format == OutputFormat.JSON:
             # Convert SeriesInfo object to dictionary for JSON serialization
             series_dict = series_info.to_dict()
@@ -203,6 +291,7 @@ def series_info():
             caption_width = 25
             print(f"{'Series Slug':<{caption_width}}: {series_info.slug}")
             print(f"{'Organization Slug':<{caption_width}}: {series_info.org_slug}")
+            print(f"{'Name':<{caption_width}}: {series_info.name}")
             print(f"{'Pattern':<{caption_width}}: {series_info.pattern}")
             print(f"{'Max Pattern Length':<{caption_width}}: {series_info.max_pattern_length}")
             print(f"{'Capacity':<{caption_width}}: {series_info.capacity}")
@@ -214,18 +303,81 @@ def series_info():
 
 
 @app.command()
-def reset():
+def series_list():
+    """
+    Get the list of available series.
+    """
+    client = SyncClient(app_context.base_url, app_context.api_key)
+    try:
+        series_list = client.series.list()
+        if app_context.output_format == OutputFormat.JSON:
+            print(json.dumps(series_list, indent=2))
+        else:
+            for series in series_list:
+                print(series)
+    except httpx.HTTPStatusError as e:
+        logger.error(f"Failed to get series list: {e.response.text}")
+        raise typer.Exit(1)
+
+
+@app.command()
+def reset(
+    series: str | None = typer.Option(None, "--series", "-s", help="The series to use for the reset."),
+):
     """
     Reset the generator.
     """
     try:
         logger.warning(f"Resetting generator at {app_context.base_url}")
         client = SyncClient(app_context.base_url, app_context.api_key)
-        client.mint.reset()
+        if series:
+            client = client.series[series]
+        else:
+            client = client.series
+        client.reset()
         logger.info("Generator reset")
     except httpx.HTTPStatusError as e:
         logger.error(f"Failed to reset generator: {e.response.text}")
         raise typer.Exit(1)
+
+
+@app.command()
+def validate(pattern: str):
+    """
+    Get information about a pattern.
+    """
+    client = SyncClient(app_context.base_url, app_context.api_key)
+    try:
+        pattern_info = client.forge.pattern_info(pattern)
+        if app_context.output_format == OutputFormat.JSON:
+            print(json.dumps(pattern_info.to_dict(), indent=2))
+        else:
+            caption_width = 25
+            print(f"{'Pattern':<{caption_width}}: {pattern_info.pattern}")
+            print(f"{'Capacity':<{caption_width}}: {pattern_info.capacity}")
+            print(f"{'Max Slug Length':<{caption_width}}: {pattern_info.max_slug_length}")
+            print(f"{'Complexity':<{caption_width}}: {pattern_info.complexity}")
+            print(f"{'Components':<{caption_width}}: {pattern_info.components}")
+    except httpx.HTTPStatusError as e:
+        logger.error(f"Failed to validate pattern: {e.response.text}")
+        raise typer.Exit(1)
+
+
+@app.command()
+def docs():
+    """
+    Get package documentation.
+    """
+    for file in list_package_files():
+        print(file)
+
+
+@app.command()
+def doc(file: str):
+    """
+    Get package documentation.
+    """
+    print(get_package_data(file))
 
 
 def main():

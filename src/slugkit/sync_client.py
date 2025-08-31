@@ -3,8 +3,32 @@ import os
 import logging
 import functools
 
-from typing import Any, Self, Generator, Callable
-from .base import GeneratorBase, StatsItem, SeriesInfo
+from typing import Any, Generator, Callable
+from .base import (
+    DictionaryInfo,
+    DictionaryTag,
+    GeneratorBase,
+    PatternInfo,
+    StatsItem,
+    SeriesInfo,
+    KeyInfo,
+    retry_with_backoff,
+    SlugKitConnectionError,
+    SlugKitAuthenticationError,
+    SlugKitClientError,
+    SlugKitServerError,
+    SlugKitValidationError,
+    SlugKitTimeoutError,
+    SlugKitQuotaError,
+    SlugKitConfigurationError,
+    SlugKitRateLimitError,
+    ErrorContext,
+    get_error_recovery_suggestions,
+    categorize_error,
+    handle_http_error,
+    Endpoints,
+    DEFAULT_BATCH_SIZE,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -17,6 +41,7 @@ class SyncSlugGenerator(GeneratorBase):
         req = self._get_request(count)
         path = self._get_path()
 
+        self._logger.debug(f"Requesting {count} slug(s)")
         response = self._http_client().post(
             path,
             json=req,
@@ -24,7 +49,7 @@ class SyncSlugGenerator(GeneratorBase):
         response.raise_for_status()
         return response.json()
 
-    def mint(self) -> Generator[str, Any, int]:
+    def stream(self) -> Generator[str, Any, int]:
         count = 0
         limit = self._limit
         batch_size = self._batch_size
@@ -38,7 +63,7 @@ class SyncSlugGenerator(GeneratorBase):
                     break
                 with self._http_client() as client:
                     req = self._get_request(batch_size, sequence)
-                    logger.info(f"Requesting batch of {batch_size} slugs")
+                    self._logger.debug(f"Requesting batch of {batch_size} slug(s)")
                     with client.stream(
                         "POST",
                         path,
@@ -61,27 +86,12 @@ class SyncSlugGenerator(GeneratorBase):
                 raise Exception(f"Error: {e.response.text}")
             raise
         except KeyboardInterrupt:
-            return count
+            ...
+        self._logger.debug(f"Generated {count} slugs")
         return count
 
-    def reset(self) -> None:
-        response = self._http_client().post(self.RESET_PATH)
-        response.raise_for_status()
-
-    def stats(self) -> list[StatsItem]:
-        response = self._http_client().get(self.STATS_PATH)
-        response.raise_for_status()
-        data = response.json()
-        return [StatsItem.from_dict(item) for item in data]
-
-    def series_info(self) -> SeriesInfo:
-        response = self._http_client().get(self.SERIES_INFO_PATH)
-        response.raise_for_status()
-        data = response.json()
-        return SeriesInfo.from_dict(data)
-
     def __iter__(self) -> Generator[str, None, None]:
-        return self.mint()
+        return self.stream()
 
 
 class RandomGenerator(GeneratorBase):
@@ -106,11 +116,127 @@ class RandomGenerator(GeneratorBase):
         if count:
             req["count"] = count
         response = self._http_client().post(
-            self.FORGE_PATH,
+            Endpoints.FORGE.value,
             json=req,
         )
         response.raise_for_status()
         return response.json()
+
+    @retry_with_backoff(max_attempts=3, base_delay=1.0)
+    def pattern_info(self, pattern: str) -> PatternInfo:
+        try:
+            response = self._http_client().post(Endpoints.PATTERN_INFO.value, json={"pattern": pattern})
+            response.raise_for_status()
+            data = response.json()
+            return PatternInfo.from_dict(data)
+        except httpx.HTTPStatusError as e:
+            raise handle_http_error(e, "pattern_info", Endpoints.PATTERN_INFO.value)
+
+    @retry_with_backoff(max_attempts=3, base_delay=1.0)
+    def dictionary_info(self) -> list[DictionaryInfo]:
+        try:
+            response = self._http_client().get(Endpoints.DICTIONARY_INFO.value)
+            response.raise_for_status()
+            data = response.json()
+            return [DictionaryInfo.from_dict(item) for item in data]
+        except httpx.HTTPStatusError as e:
+            raise handle_http_error(e, "dictionary_info", Endpoints.DICTIONARY_INFO.value)
+
+    @retry_with_backoff(max_attempts=3, base_delay=1.0)
+    def dictionary_tags(self) -> list[DictionaryTag]:
+        try:
+            response = self._http_client().get(Endpoints.DICTIONARY_TAGS.value)
+            response.raise_for_status()
+            data = response.json()
+            return [DictionaryTag.from_dict(item) for item in data]
+        except httpx.HTTPStatusError as e:
+            raise handle_http_error(e, "dictionary_tags", Endpoints.DICTIONARY_TAGS.value)
+
+
+class SeriesClient:
+    def __init__(self, httpx_client: Callable[[], httpx.Client], series_slug: str | None = None):
+        self._http_client = httpx_client
+        self._series: str | None = series_slug
+        self._logger = logging.getLogger(f"{self.__class__.__name__}")
+
+    def __getitem__(self, series_slug: str) -> "SeriesClient":
+        return self.with_series(series_slug)
+
+    def with_series(self, series_slug: str) -> "SeriesClient":
+        return SeriesClient(self._http_client, series_slug)
+
+    def __call__(
+        self,
+        *,
+        series_slug: str | None = None,
+        batch_size: int = DEFAULT_BATCH_SIZE,
+        limit: int | None = None,
+        dry_run: bool = False,
+        sequence: int = 0,
+    ) -> SyncSlugGenerator:
+        return SyncSlugGenerator(
+            self._http_client,
+            series_slug=series_slug or self._series,
+            batch_size=batch_size,
+            limit=limit,
+            dry_run=dry_run,
+            sequence=sequence,
+        )
+
+    @functools.cached_property
+    def mint(self) -> SyncSlugGenerator:
+        return self()
+
+    @functools.cached_property
+    def slice(self) -> SyncSlugGenerator:
+        return self(dry_run=True)
+
+    @retry_with_backoff(max_attempts=3, base_delay=1.0)
+    def stats(self) -> list[StatsItem]:
+        try:
+            req = {}
+            if self._series:
+                req["series"] = self._series
+            response = self._http_client().post(Endpoints.STATS.value, json=req)
+            response.raise_for_status()
+            data = response.json()
+            return [StatsItem.from_dict(item) for item in data]
+        except httpx.HTTPStatusError as e:
+            raise handle_http_error(e, "series_stats", Endpoints.STATS.value)
+
+    @retry_with_backoff(max_attempts=3, base_delay=1.0)
+    def info(self) -> SeriesInfo:
+        try:
+            req = {}
+            if self._series:
+                req["series"] = self._series
+            response = self._http_client().post(Endpoints.SERIES_INFO.value, json=req)
+            response.raise_for_status()
+            data = response.json()
+            return SeriesInfo.from_dict(data)
+        except httpx.HTTPStatusError as e:
+            raise handle_http_error(e, "series_info", Endpoints.SERIES_INFO.value)
+
+    @retry_with_backoff(max_attempts=3, base_delay=1.0)
+    def list(self) -> list[str]:
+        try:
+            response = self._http_client().get(Endpoints.SERIES_LIST.value)
+            response.raise_for_status()
+            data = response.json()
+            return data
+        except httpx.HTTPStatusError as e:
+            raise handle_http_error(e, "series_list", Endpoints.SERIES_LIST.value)
+
+    @retry_with_backoff(max_attempts=3, base_delay=1.0)
+    def reset(self) -> None:
+        try:
+            req = {}
+            if self._series:
+                req["series"] = self._series
+            response = self._http_client().post(Endpoints.RESET.value, json=req)
+            response.raise_for_status()
+        except httpx.HTTPStatusError as e:
+            raise handle_http_error(e, "series_reset", Endpoints.RESET.value)
 
 
 class SyncClient:
@@ -140,24 +266,36 @@ class SyncClient:
             timeout=self._timeout,
         )
 
+    def _create_error_context(self, operation: str, endpoint: str = None, **kwargs) -> ErrorContext:
+        """Create error context for better error reporting."""
+        return ErrorContext(operation=operation, endpoint=endpoint, base_url=self.base_url, **kwargs)
+
+    @retry_with_backoff(max_attempts=3, base_delay=1.0)
+    def ping(self) -> None:
+        try:
+            response = self._http_client().get(Endpoints.PING.value)
+            response.raise_for_status()
+        except httpx.HTTPStatusError as e:
+            raise handle_http_error(e, "ping", PING_PATH)
+
+    @retry_with_backoff(max_attempts=3, base_delay=1.0)
+    def key_info(self) -> KeyInfo:
+        try:
+            response = self._http_client().post(Endpoints.KEY_INFO.value)
+            response.raise_for_status()
+            data = response.json()
+            return KeyInfo.from_dict(data)
+        except httpx.HTTPStatusError as e:
+            raise handle_http_error(e, "key_info", Endpoints.KEY_INFO.value)
+
     @functools.cached_property
-    def mint(self) -> SyncSlugGenerator:
+    def series(self) -> SeriesClient:
         if not self._api_key:
-            raise ValueError("Mint API is available only for authenticated series")
-        return SyncSlugGenerator(self._http_client)
-
-    def __getitem__(self, series_slug: str) -> SyncSlugGenerator:
-        return self.mint.with_series(series_slug)
-
-    @functools.cached_property
-    def slice(self) -> SyncSlugGenerator:
-
-        if not self._api_key:
-            raise ValueError("Mint API is available only for authenticated series")
-        return SyncSlugGenerator(self._http_client).with_dry_run()
+            raise ValueError("API key is required")
+        return SeriesClient(self._http_client)
 
     @functools.cached_property
     def forge(self) -> RandomGenerator:
         if not self._api_key:
-            raise ValueError("Forge API is available only for authenticated series")
+            raise ValueError("API key is required")
         return RandomGenerator(self._http_client)
