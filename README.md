@@ -1,8 +1,8 @@
 # SlugKit Python SDK
 
-A Python SDK for generating human-readable IDs using SlugKit.dev service.
+A Python SDK for generating human-readable IDs using [SlugKit.dev](https://dev.slugkit.dev) service.
 
-Please see [SlugKit documentation](https://dev.slugkit.dev) for information
+Please see [SlugKit documentation](https://dev.slugkit.dev/docs) for information
 on creating series and obtaining API keys.
 
 ## Installation
@@ -40,6 +40,9 @@ series_info = client.series.info()
 
 # Get list of available series
 series_list = client.series.list()
+
+# Get subscription limits and features
+limits = client.limits()
 
 # Reset the generator
 client.series.reset()
@@ -129,13 +132,16 @@ async def main():
     stats = await client.series.stats()
 
     # Get series information
-series_info = await client.series.info()
+    series_info = await client.series.info()
 
-# Get list of available series
-series_list = await client.series.list()
+    # Get list of available series
+    series_list = await client.series.list()
 
-# Reset the generator
-await client.series.reset()
+    # Get subscription limits and features
+    limits = await client.limits()
+
+    # Reset the generator
+    await client.series.reset()
 
     # Test a pattern
 ids = await client.forge(
@@ -206,6 +212,12 @@ slugkit series-list
 
 # Get series information
 slugkit series-info
+
+# Get subscription limits and features
+slugkit limits
+
+# Get subscription limits in JSON format
+slugkit limits --output-format json
 
 # Reset the generator
 slugkit reset
@@ -308,6 +320,25 @@ from slugkit.base import DictionaryTag
 dict_tags = client.forge.dictionary_tags()
 for tag in dict_tags:
     print(f"Kind: {tag.kind}, Tag: {tag.tag}, Words: {tag.word_count}")
+```
+
+### SubscriptionFeatures
+
+Represents subscription limits and features:
+
+```python
+from slugkit.base import SubscriptionFeatures
+
+limits = client.limits()
+print(f"Max Series: {limits.max_series}")
+print(f"Requests Per Minute: {limits.req_per_minute}")
+print(f"Forge Enabled: {limits.forge_enabled}")
+print(f"Max Mint Per Day: {limits.max_mint_per_day}")
+print(f"Max Mint Per Month: {limits.max_mint_per_month}")
+
+# All fields are optional - None means not available
+if limits.max_forge_per_request is not None:
+    print(f"Max Forge Per Request: {limits.max_forge_per_request}")
 ```
 
 ## API Response Examples
@@ -413,25 +444,67 @@ for tag in dict_tags:
 
 ## Error Handling
 
-The SDK provides comprehensive error handling:
+The SDK provides comprehensive error handling with custom exception types:
 
 ```python
-import httpx
+from slugkit import SyncClient
+from slugkit.base import (
+    SlugKitConnectionError,
+    SlugKitAuthenticationError,
+    SlugKitValidationError,
+    SlugKitRateLimitError,
+    SlugKitQuotaError,
+    SlugKitServerError,
+)
+
+client = SyncClient(
+    base_url="https://dev.slugkit.dev/api/v1",
+    api_key="your-api-key"
+)
 
 try:
     ids = client.series.mint(count=10)
-except httpx.HTTPStatusError as e:
-    if e.response.status_code == 400:
-        print(f"Bad request: {e.response.text}")
-    elif e.response.status_code == 401:
-        print("Unauthorized - check your API key")
-    elif e.response.status_code == 404:
-        print("Resource not found")
-    else:
-        print(f"HTTP error {e.response.status_code}: {e.response.text}")
-except httpx.ConnectError:
-    print("Connection failed - check your network and base URL")
+except SlugKitRateLimitError as e:
+    # Rate limiting with detailed information
+    print(f"Rate limited: {e}")
+    if e.rate_limit_reason:
+        print(f"Reason: {e.rate_limit_reason}")
+    if e.retry_after:
+        print(f"Retry after: {e.retry_after} seconds")
+    if e.rpm_remaining is not None:
+        print(f"RPM remaining: {e.rpm_remaining}")
+    if e.daily_remaining is not None:
+        print(f"Daily remaining: {e.daily_remaining}")
+except SlugKitAuthenticationError as e:
+    print(f"Authentication failed: {e}")
+except SlugKitValidationError as e:
+    print(f"Validation error: {e}")
+except SlugKitQuotaError as e:
+    print(f"Quota exceeded: {e}")
+except SlugKitConnectionError as e:
+    print(f"Connection failed: {e}")
+except SlugKitServerError as e:
+    print(f"Server error: {e}")
 ```
+
+### Rate Limiting
+
+The SDK implements intelligent rate limit handling:
+
+- **Automatic Retry**: Rate limit errors with `rate-limit-exceeded` or `daily-limit-exceeded` are automatically retried
+- **Exponential Backoff**: Retry delays increase exponentially with jitter
+- **Server Retry-After**: Respects `X-Slug-Retry-After` header from the server
+- **Quota Visibility**: Shows remaining RPM, daily, monthly, and lifetime quotas
+- **Smart Non-Retry**: Permanent failures (`not-available`, `request-size-exceeded`) and long-term limits (`monthly-limit-exceeded`, `lifetime-limit-exceeded`) are not retried
+
+Rate limit reasons returned by the server:
+- `rate-limit-exceeded` - RPM limit reached (retryable with accurate retry-after)
+- `daily-limit-exceeded` - Daily limit reached (retryable with accurate retry-after)
+- `monthly-limit-exceeded` - Monthly quota exceeded (non-retryable, wait until next month)
+- `lifetime-limit-exceeded` - Lifetime quota exceeded (non-retryable, upgrade required)
+- `request-size-exceeded` - Request size too large (non-retryable, reduce batch size)
+- `not-available` - Feature not available to user (non-retryable, check subscription)
+- `redis-error` - Server error (non-retryable, contact support)
 
 ## Pattern Language
 

@@ -37,6 +37,7 @@ Control the emotional tone of generated content:
 +emo    → Emotional: passionate, thrilling, devastating
 +neut   → Neutral: standard, regular, basic, normal
 +det    → Detached: systematic, mechanical, procedural
++obj    → Objective: stable, logical, factual, direct
 ```
 
 #### Nouns & Verbs
@@ -46,6 +47,7 @@ Control the emotional tone of generated content:
 +emo    → Emotional concepts: passion, excitement, fear
 +neut   → Neutral concepts: system, process, method
 +det    → Detached concepts: mechanism, procedure, protocol
++obj    → Objective concepts: data, analysis, structure
 ```
 
 ### Content Appropriateness
@@ -60,94 +62,140 @@ Control content suitability for different audiences:
 
 **⚠️ NSFW Content**: NSFW-tagged words are opt-in only. Use `+nsfw` explicitly to include them.
 
-### Domain-Specific Tags
+### Object Categories (Nouns)
 
-#### Technology & Business
+#### Main Categories
 ```
-+tech     → Technology: server, database, API, cloud, deploy
-+business → Business: revenue, client, strategy, market
-+science  → Scientific: research, analysis, hypothesis, data
-+medical  → Medical: diagnosis, treatment, patient, clinic
-```
-
-#### Object Categories (Nouns)
-```
-+animal   → Animals: dolphin, eagle, tiger, wolf
-+person   → People: manager, developer, user, admin  
-+object   → Physical objects: server, desk, car, building
-+artifact → Human-made items: software, document, tool
-+substance → Materials: metal, wood, plastic, liquid
-+food     → Food items: pizza, coffee, bread, salad
-+building → Structures: office, warehouse, factory, home
-+vehicle  → Transportation: car, truck, plane, ship
-+device   → Electronic devices: phone, laptop, router
-+material → Raw materials: steel, concrete, fabric
-+currency → Money/financial: dollar, euro, bitcoin, cash
-+plant    → Flora: tree, flower, grass, leaf
-+drink    → Beverages: coffee, tea, water, juice
++object   → Physical objects: server, desk, car, building (18,861 words)
++artifact → Human-made items: software, document, tool (6,787 words)
++device   → Electronic devices: phone, laptop, router (1,673 words)
++machine  → Mechanical devices: engine, motor, generator (141 words)
++person   → People: manager, developer, user, admin (6,273 words)
++animal   → Animals: dolphin, eagle, tiger, wolf (2,437 words)
 ```
 
-#### Action Categories (Verbs)
+#### Specialized Categories
 ```
-+action   → Physical actions: run, jump, build, move
-+change   → Transformation: convert, modify, update, evolve  
-+travel   → Movement: navigate, journey, migrate, explore
-+be       → State of being: exist, remain, become, stay
-+have     → Possession: own, contain, include, hold
-+make     → Creation: build, generate, create, produce
-+create   → Creative actions: design, compose, invent
-+destroy  → Destructive actions: delete, remove, break
-+take     → Taking actions: grab, acquire, capture
-+give     → Giving actions: provide, share, offer
-+imagine  → Mental actions: think, dream, visualize
-```
-
-#### Content Categories
-```
-+content  → Information content: article, document, data
-+information → Data/knowledge: facts, statistics, records
-+concept  → Abstract ideas: theory, principle, philosophy  
-+idea     → Thoughts: concept, notion, plan, strategy
-+emotion  → Feelings: joy, anger, fear, excitement
-+feeling  → Sensations: warmth, pain, comfort, tension
-+music    → Musical terms: song, rhythm, melody, beat
-+art      → Artistic concepts: painting, sculpture, design
-+fantasy  → Fantasy elements: dragon, magic, wizard, quest
++activity → Actions/processes: deployment, analysis, testing (2,663 words)
++event    → Occurrences: meeting, launch, update (6,644 words)
++location → Places: office, warehouse, factory, home (882 words)
++building → Structures: office, warehouse, factory, home (231 words)
++vehicle  → Transportation: car, truck, plane, ship (198 words)
++substance → Materials: metal, wood, plastic, liquid (2,407 words)
++material → Raw materials: steel, concrete, fabric (1,856 words)
++food     → Food items: pizza, coffee, bread, salad (826 words)
++drink    → Beverages: coffee, tea, water, juice (23 words)
++plant    → Flora: tree, flower, grass, leaf (25 words)
++currency → Money/financial: dollar, euro, bitcoin, cash (57 words)
++fantasy  → Fantasy elements: dragon, magic, wizard, quest (59 words)
 ```
 
-#### Domains & Technology
+#### Abstract Categories
 ```
-+com      → Commercial domains: business, corporate TLDs
-+org      → Organization domains: non-profit, community TLDs
-+io       → Tech domains: developer-friendly TLDs
-+edu      → Educational domains: academic institutions
-+gov      → Government domains: official organizations
-+tld      → Top-level domains: com, org, net, gov
-+sld      → Second-level domains: company, product names
-+sub      → Subdomain parts: www, api, blog, shop
++content  → Information content: article, document, data (1,446 words)
++information → Data/knowledge: facts, statistics, records (133 words)
++concept  → Abstract ideas: theory, principle, philosophy (203 words)
++idea     → Thoughts: concept, notion, plan, strategy (380 words)
++emotion  → Feelings: joy, anger, fear, excitement (229 words)
++feeling  → Sensations: warmth, pain, comfort, tension (683 words)
++music    → Musical terms: song, rhythm, melody, beat (255 words)
++art      → Artistic concepts: painting, sculpture, design (63 words)
++action   → Actions: deployment, execution, processing (1,693 words)
++creation → Created things: product, design, solution (492 words)
++unit     → Measurement units: meter, kilogram, byte (528 words)
++number   → Numeric concepts: count, total, percentage (239 words)
+```
+
+#### Technical Categories
+```
++chemical → Chemicals: compound, element, solution (904 words)
++drug     → Pharmaceuticals: medicine, treatment, dose (644 words)
++surface  → Surfaces: interface, boundary, layer (128 words)
++furniture → Furniture: desk, chair, table, shelf (107 words)
++situation → Circumstances: context, scenario, case (78 words)
++state    → Conditions: status, mode, phase (4 words)
++shop     → Commercial places: store, market, outlet (38 words)
+```
+
+### Action Categories (Verbs)
+
+#### Primary Actions
+```
++change   → Transformation: convert, modify, update, evolve (2,583 words)
++act      → Physical actions: run, jump, build, move (1,246 words)
++travel   → Movement: navigate, journey, migrate, explore (463 words)
+```
+
+#### State & Possession
+```
++be       → State of being: exist, remain, become, stay (215 words)
++have     → Possession: own, contain, include, hold (119 words)
+```
+
+#### Creation & Destruction
+```
++make     → Creation: build, generate, create, produce (5 words)
++create   → Creative actions: design, compose, invent (2 words)
++become   → Transformation into state: turn, grow, develop (4 words)
++destroy  → Destructive actions: delete, remove, break (29 words)
++take     → Taking actions: grab, acquire, capture (1 word)
++give     → Giving actions: provide, share, offer (1 word)
++imagine  → Mental actions: think, dream, visualize (20 words)
+```
+
+### Domain Categories
+
+#### Domains by Type
+```
++com      → Commercial domains (.com sites) (989 words)
++org      → Organization domains (.org sites) (175 words)
++net      → Network domains (.net sites) (225 words)
++tld      → Top-level domains: com, org, net, gov (1,281 words)
++sld      → Second-level domains: company, product names (4,853 words)
++sub      → Subdomain parts: www, api, blog, shop (3,049 words)
+```
+
+#### Modern Tech Domains
+```
++io       → Tech domains (.io sites) (91 words)
++dev      → Developer domains (.dev sites) (62 words)
++app      → Application domains (.app sites) (49 words)
++cloud    → Cloud domains (.cloud sites) (65 words)
++tech     → Technology domains (.tech sites) (2 words)
+```
+
+#### Regional Domains
+```
++us       → United States domains (.us) (245 words)
++uk       → United Kingdom domains (.uk) (43 words)
++de       → German domains (.de) (76 words)
++jp       → Japanese domains (.jp) (1,890 words)
++au       → Australian domains (.au) (35 words)
++ca       → Canadian domains (.ca) (22 words)
++fr       → French domains (.fr) (33 words)
 ```
 
 ## Tag Filtering Strategies
 
 ### Include Multiple Tags
 ```
-{noun:+tech+object}           → Tech objects: server, router, database
-{adjective:+pos+tech}         → Positive tech terms: amazing, secure, fast
-{verb:+action+tech}           → Tech actions: deploy, configure, optimize
+{noun:+device+object}         → Technical objects: server, router, database
+{adjective:+pos+obj}          → Positive objective terms: excellent, stable, reliable
+{verb:+change+act}            → Active transformation verbs: modify, improve, enhance
 ```
 
 ### Exclude Unwanted Content
 ```
 {adjective:-neg-nsfw}         → No negative or NSFW words
-{noun:+tech-animal}           → Tech terms, but no animals
+{noun:+device-animal}         → Tech devices, but no animals
 {verb:-destroy-neg}           → No destructive or negative actions
 ```
 
 ### Complex Combinations
 ```
-{adjective:+pos+tech-emo<8}   → Positive tech adjectives, not emotional, max 7 chars
-{noun:+object+tech-nsfw>=4}   → Tech objects, family-friendly, min 4 chars
-{verb:+change+tech-destroy}   → Change-related tech verbs, not destructive
+{adjective:+pos+obj-emo<8}    → Positive objective adjectives, not emotional, max 7 chars
+{noun:+object+device-nsfw>=4} → Tech objects, family-friendly, min 4 chars
+{verb:+change+act-destroy}    → Change-related action verbs, not destructive
 ```
 
 ## Content Strategy by Use Case
@@ -156,11 +204,11 @@ Control content suitability for different audiences:
 ```
 # Recommended tags
 {adjective:+pos+obj-nsfw}     → professional, positive, appropriate
-{noun:+business+tech-nsfw}    → business/tech focused, clean
-{verb:+action+change-destroy} → constructive actions only
+{noun:+device+artifact-nsfw}  → business/tech focused, clean
+{verb:+change+act-destroy}    → constructive actions only
 
 # Example pattern
-"{adjective:+pos+obj} {noun:+tech} {verb:+action} {adverb:+pos}"
+"{adjective:+pos+obj} {noun:+device} {verb:+change} {adverb:+pos}"
 → "secure platform deploys efficiently"
 ```
 
@@ -169,22 +217,22 @@ Control content suitability for different audiences:
 # Always exclude NSFW
 {adjective:-nsfw+pos}         → positive, clean adjectives
 {noun:+animal+object-nsfw}    → animals and objects, family-safe
-{verb:+action+change-destroy-nsfw} → constructive, clean verbs
+{verb:+act+change-destroy-nsfw} → constructive, clean verbs
 
 # Example pattern  
-"{adjective:+pos-nsfw} {noun:+animal-nsfw} {verb:+action-nsfw}"
+"{adjective:+pos-nsfw} {noun:+animal-nsfw} {verb:+act-nsfw}"
 → "happy dolphin jumps"
 ```
 
 ### Technical Documentation
 ```
 # Focus on objective, technical terms
-{adjective:+tech+obj-emo}     → technical, unemotional
-{noun:+tech+object+device}    → tech equipment and systems  
-{verb:+tech+change+action}    → technical operations
+{adjective:+obj-emo}          → objective, unemotional
+{noun:+device+object+artifact} → tech equipment and systems  
+{verb:+change+act}            → technical operations
 
 # Example pattern
-"{verb:+tech} {adjective:+tech} {noun:+tech+object}"
+"{verb:+change} {adjective:+obj} {noun:+device}"
 → "configure secure server"
 ```
 
@@ -193,7 +241,7 @@ Control content suitability for different audiences:
 # Allow emotional, positive language
 {adjective:+pos+emo}          → exciting, emotional positivity
 {noun:+concept+idea+object}   → broad creative concepts
-{verb:+create+action+change}  → dynamic, creative actions
+{verb:+create+act+change}     → dynamic, creative actions
 
 # Example pattern
 "The {adjective:+pos+emo} {noun:+concept} will {verb:+create} {adjective:+pos} {noun:+object}"
@@ -203,13 +251,13 @@ Control content suitability for different audiences:
 ### Gaming/Fantasy Content
 ```
 # Include fantasy and creative elements
-{adjective:+fantasy+emo}      → magical, dramatic descriptors
+{adjective:+pos+emo}          → dramatic, positive descriptors
 {noun:+fantasy+animal+person} → fantasy characters and creatures
-{verb:+action+imagine+destroy} → dramatic fantasy actions
+{verb:+act+imagine+destroy}   → dramatic fantasy actions
 
 # Example pattern
-"{adjective:+fantasy} {noun:+fantasy+person} {verb:+action} the {adjective:+neg} {noun:+fantasy}"
-→ "Mystical wizard defeats the evil dragon"
+"{adjective:+pos} {noun:+fantasy} {verb:+act} the {adjective:+neg} {noun:+fantasy}"
+→ "Mighty wizard defeats the evil dragon"
 ```
 
 ## Language Support
@@ -231,51 +279,12 @@ Control content suitability for different audiences:
 {adjective}-{noun}[@de]       → German words globally
 ```
 
-## Special Dictionary Features
-
-### Domain Dictionary Categories
-The domain dictionary includes real internet domains organized by:
-
-#### By Level
-```
-+tld     → Top-level: com, org, net, edu, gov
-+sld     → Second-level: company names, brands
-+sub     → Subdomain parts: www, api, mail, blog  
-```
-
-#### By Type
-```
-+com     → Commercial: business domains
-+org     → Organization: non-profits, communities
-+edu     → Educational: schools, universities
-+gov     → Government: official agencies
-+io      → Tech: developer-focused domains
-+aws     → Cloud: AWS service domains
-+cloud   → Cloud providers: various cloud services
-```
-
-#### By Region
-```
-+us, +uk, +de, +fr, +jp, +cn, +au → Country-specific TLDs
-```
-
-### Shell Dictionary Organization
-Command-line tools organized by category:
-
-```
-+dev     → Development: git, npm, pip, cargo
-+system  → System admin: systemctl, crontab, mount
-+network → Networking: curl, wget, ssh, ping
-+data    → Data processing: awk, sed, grep, sort
-+archive → Compression: tar, zip, gzip, unzip
-```
-
 ## Best Practices
 
 ### Production Applications
 1. **Always exclude NSFW**: Use `-nsfw` in all patterns
 2. **Use positive/neutral tone**: `+pos` or `+neut` for user-facing content
-3. **Be domain-specific**: `+tech` for technical contexts, `+business` for corporate
+3. **Be specific with categories**: `+device` for technical contexts, `+person` for user references
 4. **Control length**: Use length constraints for UI/database limits
 
 ### Testing & Development  
@@ -295,16 +304,16 @@ Command-line tools organized by category:
 ### Tag Hierarchies
 Some tags work better together:
 ```
-+tech+obj        → Technical, objective (great for APIs)
-+pos+business    → Positive business language (marketing)
-+action+change   → Dynamic transformation language
++device+obj      → Technical devices, objective (great for APIs)
++pos+person      → Positive people language (user-friendly)
++change+act      → Dynamic transformation language
 +animal+fantasy  → Mythical creatures and magical animals
 ```
 
 ### Performance Considerations
 ```
 # More specific = better performance
-{noun:+tech+object<8}         → Highly filtered, fast
+{noun:+device+object<8}       → Highly filtered, fast
 {noun}                        → Broad selection, slower with large sets
 {noun:+animal+fantasy+emo}    → Multiple tags, moderate performance
 ```
@@ -312,16 +321,121 @@ Some tags work better together:
 ### Capacity Impact
 ```
 # Check capacity before using
-validate_pattern("{noun:+tech}")     → Smaller subset, lower capacity
-validate_pattern("{noun}")           → Full dictionary, higher capacity
-validate_pattern("{noun:+rare+specific}") → Very specific, very low capacity
+validate_pattern("{noun:+device}")   → Smaller subset (1,673 words)
+validate_pattern("{noun}")           → Full dictionary (41,469 words)
+validate_pattern("{noun:+fantasy}")  → Very specific (59 words)
+```
+
+## Real Examples with Actual Tags
+
+### ✅ Working Examples
+```
+// Valid adjective tags
+{adjective:+pos}    → positive words (710 available)
+{adjective:+obj}    → objective words (8,382 available)
+{adjective:+neg}    → negative words (1,395 available)
+
+// Valid noun tags  
+{noun:+device}      → devices (1,673 available)
+{noun:+person}      → people (6,273 available)
+{noun:+animal}      → animals (2,437 available)
+{noun:+object}      → objects (18,861 available)
+
+// Valid verb tags
+{verb:+change}      → change actions (2,583 available)
+{verb:+act}         → general actions (1,246 available)
+
+// Valid domain tags
+{domain:+com}       → .com domains (989 available)
+{domain:+tld}       → top-level domains (1,281 available)
+```
+
+### ❌ Common Invalid Tags
+```
+// These DON'T exist - will cause errors
+{adjective:+tech}     → ❌ No tech tag for adjectives
+{noun:+tech}          → ❌ No tech tag for nouns  
+{adjective:+business} → ❌ No business tag
+{verb:+tech}          → ❌ No tech tag for verbs
+{noun:+professional}  → ❌ No professional tag
+{adjective:+security} → ❌ No security tag
+```
+
+## Tag Availability Summary
+
+### Adjectives (7 tags total)
+- `det` (14,138 words) - Detached/analytical
+- `obj` (8,382 words) - Objective  
+- `neut` (6,595 words) - Neutral
+- `emo` (2,944 words) - Emotional
+- `neg` (1,395 words) - Negative
+- `pos` (710 words) - Positive
+- `nsfw` (35 words) - Not safe for work
+
+### Nouns (44 tags total)
+Most useful:
+- `object` (18,861) - General objects
+- `det` (39,391) - Detached concepts
+- `obj` (26,812) - Objective things
+- `artifact` (6,787) - Human-made items
+- `event` (6,644) - Events/occurrences
+- `person` (6,273) - People and roles
+- `activity` (2,663) - Activities
+- `animal` (2,437) - Animals
+- `substance` (2,407) - Materials
+- `material` (1,856) - Raw materials
+- `action` (1,693) - Actions
+- `device` (1,673) - Electronic devices
+- `content` (1,446) - Information content
+
+### Verbs (17 tags total)
+Most useful:
+- `det` (8,172) - Detached actions
+- `obj` (5,689) - Objective actions  
+- `neut` (2,597) - Neutral actions
+- `change` (2,583) - Change actions
+- `act` (1,246) - Physical actions
+- `travel` (463) - Movement
+- `emo` (233) - Emotional actions
+- `be` (215) - State of being
+
+### Domains (195+ tags)
+Including country codes, TLDs, and special categories like `com`, `org`, `tld`, `dev`, `io`, etc.
+
+## Pattern Testing Examples
+
+Test these working patterns:
+
+```
+// Simple professional patterns
+validate_pattern("{adjective:+pos}-{noun:+device}")
+forge("{adjective:+pos}-{noun:+device}", count=3)
+→ ["amazing-server", "brilliant-database", "excellent-platform"]
+
+// User-friendly IDs  
+validate_pattern("{adjective:+pos}-{noun:+animal}-{number:3d}")
+forge("{adjective:+pos}-{noun:+animal}-{number:3d}", count=3)
+→ ["happy-dolphin-142", "smart-eagle-738", "bright-tiger-395"]
+
+// Technical naming
+validate_pattern("{noun:+device}-{adjective:+obj}-{number:2x}")
+forge("{noun:+device}-{adjective:+obj}-{number:2x}", count=3)
+→ ["server-stable-a3", "database-secure-f7", "router-direct-2c"]
+
+// Domain examples
+validate_pattern("{adjective:+pos}.{domain:+tld}")
+forge("{adjective:+pos}.{domain:+tld}", count=3)
+→ ["amazing.com", "brilliant.org", "excellent.net"]
 ```
 
 ---
 
-**💡 Pro Tips:**
-- Start broad, then add constraints: `{noun}` → `{noun:+tech}` → `{noun:+tech-nsfw<8}`
-- Use `dictionary_tags()` regularly to discover new filtering options
-- Test tag combinations with small `count` values first
-- Consider your content strategy when choosing emotional tags
-- Remember that more tags = smaller word selection but more targeted content
+**💡 Key Takeaways:**
+- **Always use `dictionary_tags()` first** to see what's actually available
+- **Most "expected" tags don't exist** - SlugKit has a specific, limited set
+- **Focus on emotional tags** (`+pos`, `+neg`, `+obj`) and category tags (`+device`, `+person`, `+animal`)
+- **Test patterns before using** with `validate_pattern()` 
+- **Start simple** and add constraints gradually
+- **The documentation had many invalid examples** - always verify against the actual API
+
+Use `dictionary_info()` and `dictionary_tags()` as your source of truth, not documentation examples!

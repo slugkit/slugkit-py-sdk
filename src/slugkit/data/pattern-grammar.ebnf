@@ -4,6 +4,7 @@ selector          := kind ['@' lang], [':', [tags], [length_constraint], [option
 global_settings   := '[' ['@' lang], [tags], [length_constraint], [options] ']';
 number_gen        := 'number', ':', length, [(',', number_base) | number_base_short ];
 special_char_gen  := 'special', [':', number, ['-', length]];
+emoji_gen         := 'emoji', [':', [tags], [options]];
 kind              := identifier;
 lang              := identifier;
 tags              := (include_tag | exclude_tag)*;
@@ -11,8 +12,18 @@ include_tag       := '+', tag;
 exclude_tag       := '-', tag;
 length_constraint := comparison_op, length;
 comparison_op     := eq | ne | lt | le | gt | ge;
-options           := option (',' option)*;
+options           := option (' ' option)*;
 option            := identifier '=' option_value;
+
+emoji_options     := emoji_option (' ' emoji_option)*;
+emoji_option      := count_option | unique_option | tone_option | gender_option;
+count_option      := 'count=', (number | number, '-', number);
+unique_option     := 'unique=', boolean;
+tone_option       := 'tone=', tone_value;
+gender_option     := 'gender=', gender_value;
+tone_value        := 'light' | 'medium-light' | 'medium' | 'medium-dark' | 'dark' | 'random';
+gender_value      := 'male' | 'female' | 'neutral' | 'random';
+
 tag               := (ALNUM | '_')+;
 identifier        := (ALPHA | '_'), (ALNUM | '_')*;
 option_value      := tag | number;
@@ -25,6 +36,8 @@ ge                := '>=';
 length            := number;
 number_base       := 'dec' | 'hex' | 'HEX' | 'roman' | 'ROMAN';
 number_base_short := 'd' | 'x' | 'X' | 'r' | 'R';
+
+boolean           := 'true' | 'false';
 
 number            := '0' | NON_ZERO_DIGIT, { DIGIT };
 NON_ZERO_DIGIT    := '1'..'9';

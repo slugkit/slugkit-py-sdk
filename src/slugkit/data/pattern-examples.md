@@ -9,11 +9,11 @@
 → "amazing-tutorial-2024"
 
 // Product pages  
-"{adjective:<8}-{noun:+tech}-{verb:<6}"
+"{adjective:<8}-{noun:+device}-{verb:<6}"
 → "smart-server-deploy"
 
 // Category slugs
-"{adjective:+tech}/{noun:+object}"
+"{adjective:+pos}/{noun:+object}"
 → "advanced/database"
 ```
 
@@ -50,11 +50,11 @@
 ### API Endpoints
 ```
 // RESTful endpoints
-"/api/{noun:+tech}/{adjective:<6}-{noun:<8}/{number:4d}"
+"/api/{noun:+person}/{adjective:<6}-{noun:<8}/{number:4d}"
 → "/api/users/active-sessions/2024"
 
 // Webhook URLs
-"/hooks/{adjective:+tech}-{noun}/{number:8x}"
+"/hooks/{adjective:+pos}-{noun}/{number:8x}"
 → "/hooks/secure-payment/a1b2c3d4"
 ```
 
@@ -63,45 +63,45 @@
 ### Server & Service Naming
 ```
 // Server hostnames
-"{adjective:+tech}<6-{noun:+tech}<8-{number:2d}"
+"{adjective:+obj}<6-{noun:+device}<8-{number:2d}"
 → "prod-database-01"
 
 // Kubernetes pods
-"{noun:+tech}-{adjective}-{number:4x}"
+"{noun:+device}-{adjective}-{number:4x}"
 → "webapp-stable-f3a7"
 
 // Docker containers
-"{adjective:+tech}/{noun:+tech}:{number:1d}.{number:1d}"
+"{adjective:+pos}/{noun:+artifact}:{number:1d}.{number:1d}"
 → "stable/webapp:2.1"
 ```
 
 ### Environment & Configuration
 ```
 // Environment names
-"{ADJECTIVE:+tech}_{NOUN}_ENV"
-→ "PROD_DATABASE_ENV"
+"{ADJECTIVE:+obj}_{NOUN}_ENV"
+→ "STABLE_DATABASE_ENV"
 
 // Config files
-"{noun:<8}-{adjective:+tech}.{domain:+tld}"
+"{noun:<8}-{adjective:+obj}.{domain:+tld}"
 → "database-secure.conf"
 
 // Backup naming
-"backup-{noun:+tech}-{number:2d}{number:2d}{number:4d}-{number:4x}"
+"backup-{noun:+device}-{number:2d}{number:2d}{number:4d}-{number:4x}"
 → "backup-postgres-31122024-a1f3"
 ```
 
 ### Monitoring & Logging
 ```
 // Log files
-"{noun:+tech}-{adjective:+tech}-{number:2d}{number:2d}.log"
+"{noun:+device}-{adjective:+obj}-{number:2d}{number:2d}.log"
 → "webapp-error-1225.log"
 
 // Metric names
-"{noun:+tech}.{adjective}.{verb}.count"
+"{noun:+device}.{adjective}.{verb}.count"
 → "database.active.connections.count"
 
 // Alert names
-"{ADJECTIVE:+neg} {NOUN:+tech} {verb:+neg}"
+"{ADJECTIVE:+neg} {NOUN:+device} {verb:+neg}"
 → "CRITICAL DATABASE FAILURE"
 ```
 
@@ -110,7 +110,7 @@
 ### Table & Column Names
 ```
 // Table names
-"{noun:+tech}_{adjective:+tech}"
+"{noun:+device}_{adjective:+obj}"
 → "users_active"
 
 // Column identifiers  
@@ -118,7 +118,7 @@
 → "account_created_at"
 
 // Index names
-"idx_{noun:+tech}_{adjective:+tech}_{number:2d}"
+"idx_{noun:+device}_{adjective:+obj}_{number:2d}"
 → "idx_users_active_01"
 ```
 
@@ -140,15 +140,15 @@
 ### Database Seeding
 ```
 // Company names
-"{Adjective} {Noun} {noun:+tech}"
+"{Adjective} {Noun} {noun:+artifact}"
 → "Smart Database Solutions"
 
 // Product names
-"{adjective:+pos} {noun:+tech} {number:1d}.{number:1d}"
+"{adjective:+pos} {noun:+device} {number:1d}.{number:1d}"
 → "Amazing Platform 2.1"
 
 // Department codes
-"{ADJECTIVE:<4}_{NOUN:+tech:<6}"
+"{ADJECTIVE:<4}_{NOUN:+device:<6}"
 → "PROD_WEBAPP"
 ```
 
@@ -157,7 +157,7 @@
 ### Test Case IDs
 ```
 // Test identifiers
-"test_{noun:+tech}_{verb}_{number:3d}"
+"test_{noun:+device}_{verb}_{number:3d}"
 → "test_database_connect_042"
 
 // Scenario names
@@ -165,25 +165,25 @@
 → "Given active user, when login, then succeed"
 
 // Mock data labels
-"{adjective:+pos}_{noun:+tech}_{number:2d}"
+"{adjective:+pos}_{noun:+device}_{number:2d}"
 → "valid_account_01"
 ```
 
 ### Performance Testing
 ```
 // Load test names
-"load_{noun:+tech}_{number:3d}_{adjective:+tech}"
+"load_{noun:+device}_{number:3d}_{adjective:+obj}"
 → "load_api_100_concurrent"
 
 // Benchmark IDs
-"bench_{verb}_{noun:+tech}_{number:4x}"
+"bench_{verb}_{noun:+device}_{number:4x}"
 → "bench_query_database_a1f3"
 ```
 
 ### Error Simulation
 ```
 // Error messages
-"Error {number:3d}: {adjective:+neg} {noun:+tech} {verb:+neg}"
+"Error {number:3d}: {adjective:+neg} {noun:+device} {verb:+neg}"
 → "Error 500: broken database connection failed"
 
 // Exception names
@@ -191,7 +191,7 @@
 → "InvalidDatabaseException"
 
 // Failure scenarios
-"{noun:+tech} {verb:+neg} after {number:2d} {noun:+time}"
+"{noun:+device} {verb:+neg} after {number:2d} {noun:+event}"
 → "connection timeout after 30 seconds"
 ```
 
@@ -204,22 +204,22 @@
 → "## Complete Database Guide"
 
 // Tutorial steps
-"Step {number:1d}: {Verb} the {noun:+tech}"
+"Step {number:1d}: {Verb} the {noun:+device}"
 → "Step 3: Configure the server"
 
 // Code examples
-"// {Adjective} {noun:+tech} implementation"
+"// {Adjective} {noun:+device} implementation"
 → "// Simple database implementation"
 ```
 
 ### Blog & Marketing
 ```
 // Article titles
-"How to {verb} {adjective:+pos} {noun:+tech} in {number:2d} minutes"
+"How to {verb} {adjective:+pos} {noun:+artifact} in {number:2d} minutes"
 → "How to deploy amazing applications in 15 minutes"
 
 // Social media
-"{Adjective:+pos} {noun:+tech}! {verb:+pos} your {noun} {adverb:+pos} 🚀"
+"{Adjective:+pos} {noun:+device}! {verb:+pos} your {noun} {adverb:+pos} 🚀"
 → "Amazing platform! Scale your business efficiently 🚀"
 
 // Newsletter subjects
@@ -232,11 +232,11 @@
 ### Character & World Generation
 ```
 // Character names
-"{adjective:+fantasy} {noun:+person} the {adjective:+pos}"
+"{adjective:+pos} {noun:+person} the {adjective:+pos}"
 → "Mighty Warrior the Brave"
 
 // Location names
-"The {adjective:+fantasy} {noun:+location} of {noun:+fantasy}"
+"The {adjective:+pos} {noun:+location} of {noun:+fantasy}"
 → "The Ancient Castle of Dragons"
 
 // Item names
@@ -251,7 +251,7 @@
 → "rusty_sword_042"
 
 // Level identifiers
-"level_{number:2d}_{adjective:+difficulty}_{noun:+location}"
+"level_{number:2d}_{adjective:+neg}_{noun:+location}"
 → "level_05_hard_dungeon"
 
 // Achievement names
@@ -264,26 +264,26 @@
 ### Product Management
 ```
 // SKUs
-"{adjective:<4}-{noun:+product}<6-{number:4d}"
+"{adjective:<4}-{noun:+artifact}<6-{number:4d}"
 → "FAST-LAPTOP-2024"
 
 // Inventory codes
-"{ADJECTIVE:+tech:<4}_{NOUN:<6}_{NUMBER:6x}"
-→ "PROD_SERVER_A1B2C3"
+"{ADJECTIVE:+obj:<4}_{NOUN:<6}_{NUMBER:6x}"
+→ "STABLE_SERVER_A1B2C3"
 
 // Coupon codes
-"{adjective:+pos}{number:2d}{adjective:+tech}"
-→ "SAVE25SECURE"
+"{adjective:+pos}{number:2d}{adjective:+obj}"
+→ "SAVE25STABLE"
 ```
 
 ### Customer Service
 ```
 // Ticket IDs
-"TKT-{adjective:+tech}-{number:6d}"
+"TKT-{adjective:+obj}-{number:6d}"
 → "TKT-URGENT-123456"
 
 // Case numbers
-"{noun:+tech}-{number:4d}-{adjective:+priority}"
+"{noun:+device}-{number:4d}-{adjective:+pos}"
 → "BILLING-4567-HIGH"
 
 // Reference codes
@@ -296,26 +296,26 @@
 ### Access Control
 ```
 // Permission names
-"{verb}_{noun:+tech}_{adjective:+security}"
+"{verb}_{noun:+device}_{adjective:+obj}"
 → "read_database_secure"
 
 // Role identifiers
-"{adjective:+tech}_{noun:+person}"
+"{adjective:+obj}_{noun:+person}"
 → "admin_user"
 
 // Session tokens (readable part)
-"sess_{adjective:+tech}_{number:8x}"
+"sess_{adjective:+obj}_{number:8x}"
 → "sess_secure_a1b2c3d4"
 ```
 
 ### Audit & Compliance
 ```
 // Log entries
-"[{number:2d}/{number:2d}/{number:4d}] {ADJECTIVE} {noun:+tech} {verb:+security}"
+"[{number:2d}/{number:2d}/{number:4d}] {ADJECTIVE} {noun:+device} {verb:+neg}"
 → "[31/12/2024] FAILED database authentication"
 
 // Compliance codes
-"{ADJECTIVE:+security}_{NOUN:+tech}_{NUMBER:4d}"
+"{ADJECTIVE:+obj}_{NOUN:+device}_{NUMBER:4d}"
 → "GDPR_DATA_2024"
 ```
 
@@ -325,9 +325,9 @@
 ```
 "version: {number:1d}.{number:1d}.{number:2d}
 name: {adjective}-{noun}
-description: {adjective:+pos} {noun:+tech} for {verb}<6
+description: {adjective:+pos} {noun:+device} for {verb}<6
 maintainer: {Noun:+person} Team
-status: {adjective:+tech}"
+status: {adjective:+obj}"
 
 → "version: 2.1.15
 name: secure-platform
@@ -338,16 +338,16 @@ status: stable"
 
 ### Conditional-like Patterns with Global Settings
 ```
-// All positive tech terms
-"{noun} {verb} {adjective} {noun}[+pos+tech]"
+// All positive objective terms
+"{noun} {verb} {adjective} {noun}[+pos+obj]"
 → "platform deploys amazing solution"
 
-// German technical terms (if supported)
-"{noun} {verb} {noun}[@de+tech]"
+// German terms (if supported)
+"{noun} {verb} {noun}[@de+obj]"
 → "Datenbank verwendet System"
 
-// Short professional terms
-"{adjective} {noun} {verb}[+professional<6]"
+// Short positive terms
+"{adjective} {noun} {verb}[+pos<6]"
 → "smart system works"
 ```
 
@@ -376,17 +376,17 @@ status: stable"
 ```
 // Billions of combinations
 "{adjective}-{noun}-{number:6x}"
-→ Capacity: ~708M × 16M = 11+ trillion combinations
+→ Capacity: ~17,000 × 41,000 = 11+ trillion combinations
 
 // Moderate capacity with constraints
-"{adjective:<6}-{noun:+tech<8}-{number:3d}"  
+"{adjective:<6}-{noun:+device<8}-{number:3d}"  
 → More manageable capacity with better performance
 ```
 
 ### Low-Volume Patterns (Specific Use Cases)
 ```
 // Limited but meaningful
-"{adjective:+pos<5}-{noun:+tech==4}-{number:2d}"
+"{adjective:+pos<5}-{noun:+device==4}-{number:2d}"
 → Fewer combinations, highly constrained output
 ```
 
@@ -405,7 +405,7 @@ status: stable"
 
 **Pro Tips:**
 - Use `validate_pattern()` to check capacity before generation
-- Combine `dictionary_info()` and `dictionary_tags()` to understand available words
+- Combine `dictionary_info()` and `dictionary_tags()` to understand available words  
 - Test patterns with small `count` values first
 - Consider length constraints for UI/database field limits
 - Use global settings for consistent theming across complex patterns

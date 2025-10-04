@@ -10,3 +10,16 @@ services:
       - 5010:5010
     environment:
       - SLUGKIT_BASE_URL=https://dev.slugkit.dev/api/v1
+  mcp-inspector:
+    build:
+      context: .
+      dockerfile: docker/mcp-inspector.dockerfile
+    image: slugkit-mcp-inspector-arm64:latest
+    ports:
+      - 3000:3000
+    environment:
+      - NODE_ENV=production
+      - DANGEROUSLY_OMIT_AUTH=true
+    volumes:
+      - ./config:/app/config:ro
+    restart: unless-stopped
