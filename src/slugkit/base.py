@@ -28,12 +28,16 @@ class Endpoints(str, Enum):
 
     PING = "/ping"
     KEY_INFO = "/key-info"
+    LIMITS = "/limits"
     MINT = "/gen/mint"
     SLICE = "/gen/slice"
     FORGE = "/gen/forge"
     RESET = "/gen/reset"
     STATS = "/gen/stats/latest"
-    SERIES_LIST = "/gen/available-series"
+    SERIES_LIST = "/gen/series"
+    SERIES_CREATE = "/gen/series"
+    SERIES_UPDATE = "/gen/series"
+    SERIES_DELETE = "/gen/series"
     SERIES_INFO = "/gen/series-info"
     PATTERN_INFO = "/gen/pattern-info"
     DICTIONARY_INFO = "/gen/dictionary-info"
@@ -214,19 +218,31 @@ def should_retry_error(error: Exception) -> bool:
     return False
 
 
-def calculate_backoff_delay(attempt: int, base_delay: float = 1.0, max_delay: float = 60.0) -> float:
+def calculate_backoff_delay(
+    attempt: int,
+    base_delay: float = 1.0,
+    max_delay: float = 60.0,
+    retry_after: int | None = None
+) -> float:
     """
     Calculate exponential backoff delay with jitter.
+
+    If retry_after is provided (from rate limit header), use that instead.
 
     Args:
         attempt: Current attempt number (1-based)
         base_delay: Base delay in seconds (default: 1.0)
         max_delay: Maximum delay in seconds (default: 60.0)
+        retry_after: Explicit retry delay from server (e.g., X-Slug-Retry-After header)
 
     Returns:
         Delay in seconds before next retry
     """
     import random
+
+    # If server explicitly tells us when to retry, respect that
+    if retry_after is not None and retry_after > 0:
+        return float(retry_after)
 
     # Exponential backoff: base_delay * 2^(attempt-1)
     delay = min(base_delay * (2 ** (attempt - 1)), max_delay)
@@ -284,8 +300,13 @@ def retry_with_backoff(
                     if not should_retry or attempt == max_attempts:
                         break
 
+                    # Extract retry_after from rate limit errors
+                    retry_after = None
+                    if isinstance(e, SlugKitRateLimitError) and hasattr(e, 'retry_after'):
+                        retry_after = e.retry_after
+
                     # Calculate delay and wait
-                    delay = calculate_backoff_delay(attempt, base_delay, max_delay)
+                    delay = calculate_backoff_delay(attempt, base_delay, max_delay, retry_after)
                     import time
 
                     time.sleep(delay)
@@ -312,8 +333,13 @@ def retry_with_backoff(
                     if not should_retry or attempt == max_attempts:
                         break
 
+                    # Extract retry_after from rate limit errors
+                    retry_after = None
+                    if isinstance(e, SlugKitRateLimitError) and hasattr(e, 'retry_after'):
+                        retry_after = e.retry_after
+
                     # Calculate delay and wait
-                    delay = calculate_backoff_delay(attempt, base_delay, max_delay)
+                    delay = calculate_backoff_delay(attempt, base_delay, max_delay, retry_after)
                     await asyncio.sleep(delay)
 
             # Re-raise the last error
@@ -353,6 +379,24 @@ class KeyScope(Enum):
 
     ORG = "org"
     SERIES = "series"
+
+
+class Pagination(BaseModel):
+    """Pydantic model representing a pagination object from the API response."""
+
+    limit: int
+    offset: int
+    total: int
+    has_more: bool
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "Pagination":
+        """Create a Pagination instance from a dictionary (compat helper)."""
+        return cls.model_validate(data)
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert the Pagination to a dictionary (compat helper)."""
+        return self.model_dump()
 
 
 class KeyInfo(BaseModel):
@@ -424,7 +468,7 @@ class SeriesInfo(BaseModel):
     org_slug: str
     name: str
     pattern: str
-    max_pattern_length: int
+    max_slug_length: int
     capacity: str
     generated_count: str
     mtime: str
@@ -490,6 +534,59 @@ class DictionaryTag(BaseModel):
 
     def to_dict(self) -> dict[str, Any]:
         """Convert the DictionaryTag to a dictionary (compat helper)."""
+        return self.model_dump()
+
+
+class PaginatedTags(BaseModel):
+    """Pydantic model representing a paginated tags object from the API response."""
+
+    data: list[DictionaryTag]
+    pagination: Pagination
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "PaginatedTags":
+        """Create a PaginatedTags instance from a dictionary (compat helper)."""
+        return cls.model_validate(data)
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert the PaginatedTags to a dictionary (compat helper)."""
+        return self.model_dump()
+
+
+class SubscriptionFeatures(BaseModel):
+    """Pydantic model representing subscription features and limits from the API response.
+
+    All fields are optional - missing fields indicate the feature/limit is not available.
+    """
+
+    custom_features: bool | None = None
+    max_series: int | None = None
+    req_per_minute: int | None = None
+    burst_req_per_minute: int | None = None
+    forge_enabled: bool | None = None
+    max_forge_per_day: int | None = None
+    max_forge_per_month: int | None = None
+    max_forge_per_request: int | None = None
+    mint_enabled: bool | None = None
+    max_mint_per_day: int | None = None
+    max_mint_per_month: int | None = None
+    max_mint_per_request: int | None = None
+    slice_enabled: bool | None = None
+    slice_window_back: int | None = None
+    slice_window_forward: int | None = None
+    max_nodes: int | None = None
+    api_key_access: bool | None = None
+    api_key_scopes: list[str] | None = None
+    sdk_access: bool | None = None
+    sdk_scopes: list[str] | None = None
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "SubscriptionFeatures":
+        """Create a SubscriptionFeatures instance from a dictionary (compat helper)."""
+        return cls.model_validate(data)
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert the SubscriptionFeatures to a dictionary (compat helper)."""
         return self.model_dump()
 
 

@@ -3,6 +3,7 @@ Error handling utilities for SlugKit SDK.
 """
 
 import time
+import json
 from typing import Optional, Any
 from enum import Enum
 import httpx
@@ -125,9 +126,71 @@ class SlugKitServerError(SlugKitError):
 
 
 class SlugKitRateLimitError(SlugKitError):
-    """Rate limiting and throttling errors."""
+    """Rate limiting and throttling errors with retry information."""
 
-    pass
+    def __init__(
+        self,
+        message: str,
+        context: Optional[ErrorContext] = None,
+        cause: Optional[Exception] = None,
+        timestamp: Optional[float] = None,
+        retry_after: Optional[int] = None,
+        rate_limit_reason: Optional[str] = None,
+        rpm_remaining: Optional[int] = None,
+        daily_remaining: Optional[int] = None,
+        monthly_remaining: Optional[int] = None,
+        lifetime_remaining: Optional[int] = None,
+    ):
+        super().__init__(message, context, cause, timestamp)
+        self.retry_after = retry_after
+        self.rate_limit_reason = rate_limit_reason
+        self.rpm_remaining = rpm_remaining
+        self.daily_remaining = daily_remaining
+        self.monthly_remaining = monthly_remaining
+        self.lifetime_remaining = lifetime_remaining
+
+    def __str__(self) -> str:
+        """Enhanced string representation with rate limit details."""
+        parts = [self.message]
+
+        # Add rate limit reason if available
+        if self.rate_limit_reason:
+            parts.append(f"Reason: {self.rate_limit_reason}")
+
+        # Add retry after information
+        if self.retry_after is not None:
+            hours = self.retry_after / 3600
+            if hours >= 1:
+                parts.append(f"Retry after: {self.retry_after} seconds ({hours:.1f} hours)")
+            elif self.retry_after >= 60:
+                minutes = self.retry_after / 60
+                parts.append(f"Retry after: {self.retry_after} seconds ({minutes:.1f} minutes)")
+            else:
+                parts.append(f"Retry after: {self.retry_after} seconds")
+
+        # Add quota information if available
+        quota_parts = []
+        if self.rpm_remaining is not None:
+            quota_parts.append(f"RPM: {self.rpm_remaining}")
+        if self.daily_remaining is not None:
+            quota_parts.append(f"Daily: {self.daily_remaining}")
+        if self.monthly_remaining is not None:
+            quota_parts.append(f"Monthly: {self.monthly_remaining}")
+        if self.lifetime_remaining is not None:
+            quota_parts.append(f"Lifetime: {self.lifetime_remaining}")
+
+        if quota_parts:
+            parts.append(f"Remaining quotas: {', '.join(quota_parts)}")
+
+        # Add context information
+        if self.context:
+            parts.append(f"Context: {self.get_context_info()}")
+
+        # Add cause information
+        if self.cause:
+            parts.append(f"Caused by: {str(self.cause)}")
+
+        return " | ".join(parts)
 
 
 class SlugKitValidationError(SlugKitError):
@@ -199,14 +262,83 @@ def get_error_recovery_suggestions(error: SlugKitError) -> list[str]:
         )
 
     elif isinstance(error, SlugKitRateLimitError):
-        suggestions.extend(
-            [
-                "Wait before making additional requests",
-                "Reduce request frequency",
-                "Consider implementing exponential backoff",
-                "Check your current usage limits",
-            ]
-        )
+        # Provide context-specific suggestions based on rate limit reason
+        reason = getattr(error, 'rate_limit_reason', None) if hasattr(error, 'rate_limit_reason') else None
+
+        if reason == 'not-available':
+            # Feature not available
+            suggestions.extend(
+                [
+                    "This feature is not available with your current subscription",
+                    "Check your subscription plan and limits",
+                    "Contact support to enable this feature",
+                    "Consider upgrading your subscription plan",
+                ]
+            )
+        elif reason == 'request-size-exceeded':
+            # Request size too large
+            suggestions.extend(
+                [
+                    "Your request size exceeds the maximum allowed",
+                    "Reduce the number of items in your request",
+                    "Split large requests into smaller batches",
+                    "Check the API documentation for size limits",
+                ]
+            )
+        elif reason in {'monthly-limit-exceeded', 'lifetime-limit-exceeded'}:
+            # Long-term limits without accurate retry-after
+            limit_type = 'monthly' if reason == 'monthly-limit-exceeded' else 'lifetime'
+            suggestions.extend(
+                [
+                    f"You have reached your {limit_type} quota",
+                    "Wait until the next billing period or quota reset" if limit_type == 'monthly' else "Your lifetime quota has been exhausted",
+                    "Check your usage dashboard for quota renewal date",
+                    "Consider upgrading to a plan with higher limits",
+                    "Retrying will not help until quotas reset",
+                ]
+            )
+        elif reason in {'rate-limit-exceeded', 'daily-limit-exceeded'}:
+            # Short-term token bucket limits with accurate retry-after
+            limit_type = 'rate' if reason == 'rate-limit-exceeded' else 'daily'
+            retry_after = getattr(error, 'retry_after', None) if hasattr(error, 'retry_after') else None
+            if retry_after and retry_after > 0:
+                suggestions.extend(
+                    [
+                        f"{limit_type.capitalize()} limit will reset in {retry_after} seconds",
+                        "The SDK will automatically retry with proper backoff",
+                        "Reduce request frequency to stay within limits",
+                        "Check your current quota status",
+                    ]
+                )
+            else:
+                suggestions.extend(
+                    [
+                        f"You have exceeded your {limit_type} limit",
+                        "The SDK will automatically retry with proper backoff",
+                        "Reduce request frequency to stay within limits",
+                        "Check your current usage limits and quotas",
+                    ]
+                )
+        elif reason == 'redis-error':
+            # Server-side Redis error
+            suggestions.extend(
+                [
+                    "A server-side error occurred while checking rate limits",
+                    "This is a temporary server issue, not a client problem",
+                    "Try again in a few moments",
+                    "Contact support if the issue persists",
+                ]
+            )
+        else:
+            # Unknown or unspecified reason - generic advice
+            suggestions.extend(
+                [
+                    "Wait before making additional requests",
+                    "Reduce request frequency",
+                    "Check your current usage limits and quotas",
+                    "Review the rate limit reason for more details",
+                ]
+            )
 
     elif isinstance(error, SlugKitServerError):
         suggestions.extend(
@@ -302,6 +434,34 @@ def categorize_error(error: SlugKitError) -> dict[str, Any]:
     }
 
 
+def extract_error_info(response_text: str) -> tuple[str, dict]:
+    """Extract error message and details from server response.
+
+    Args:
+        response_text: Raw response text from server
+
+    Returns:
+        Tuple of (error_message, error_details)
+    """
+    if not response_text:
+        return f"HTTP {response_text}", {}
+
+    # Try to parse JSON error response
+    try:
+        if response_text.strip().startswith("{"):
+            error_data = json.loads(response_text)
+            error_message = error_data.get("message", response_text)
+            error_details = {
+                "code": error_data.get("code"),
+            }
+            return error_message, error_details
+        else:
+            return response_text, {}
+    except (ValueError, KeyError, json.JSONDecodeError):
+        # Fallback to raw response text
+        return response_text, {}
+
+
 def handle_http_error(
     error: "httpx.HTTPStatusError",
     operation: str,
@@ -325,22 +485,80 @@ def handle_http_error(
     """
     context = ErrorContext(operation=operation, endpoint=endpoint, base_url=base_url, **kwargs)
 
-    if error.response.status_code == 401:
-        return SlugKitAuthenticationError("Invalid or expired API key", cause=error, context=context)
-    elif error.response.status_code == 403:
-        return SlugKitAuthenticationError("Insufficient permissions", cause=error, context=context)
-    elif error.response.status_code == 404:
-        return SlugKitClientError("Resource not found", cause=error, context=context)
-    elif error.response.status_code == 422:
-        return SlugKitValidationError("Invalid request data", cause=error, context=context)
-    elif error.response.status_code == 429:
-        return SlugKitRateLimitError("Rate limit exceeded", cause=error, context=context)
-    elif error.response.status_code >= 500:
-        return SlugKitServerError("Server error", cause=error, context=context)
+    # Extract server response information
+    status_code = error.response.status_code
+
+    # Safely read response text (handle streaming responses)
+    try:
+        response_text = error.response.text.strip()
+    except httpx.ResponseNotRead:
+        # For streaming responses, we need to read the content first
+        try:
+            response_body = error.response.read()
+            # Decode bytes to string
+            response_text = response_body.decode('utf-8').strip() if response_body else ""
+        except Exception as read_error:
+            # If reading fails, use a default error message
+            import logging
+            logging.debug(f"Failed to read error response body: {read_error}")
+            response_text = ""
+
+    # Extract error message and details from server response
+    error_message, error_details = extract_error_info(response_text)
+
+    # If we got an empty error message, use a meaningful default with status code
+    if not error_message or error_message.startswith("HTTP "):
+        error_message = f"HTTP {status_code}: {error.response.reason_phrase}"
+
+    # Add error details to context if available
+    if error_details:
+        for key, value in error_details.items():
+            if value is not None:
+                setattr(context, key, value)
+
+    # Extract rate limiting headers for 429 errors
+    rate_limit_info = {}
+    if status_code == 429:
+        headers = error.response.headers
+
+        # Helper function to parse integer headers with -1 for unlimited
+        def parse_int_header(value):
+            if value is None:
+                return None
+            try:
+                return int(value)
+            except (ValueError, TypeError):
+                return None
+
+        rate_limit_info = {
+            'retry_after': parse_int_header(headers.get('X-Slug-Retry-After')),
+            'rate_limit_reason': headers.get('X-Slug-Rate-Limit-Reason'),
+            'rpm_remaining': parse_int_header(headers.get('X-Slug-Rpm-Remaining')),
+            'daily_remaining': parse_int_header(headers.get('X-Slug-Daily-Remaining')),
+            'monthly_remaining': parse_int_header(headers.get('X-Slug-Monthly-Remaining')),
+            'lifetime_remaining': parse_int_header(headers.get('X-Slug-Lifetime-Remaining')),
+        }
+
+        # Add rate limit info to context as well
+        for key, value in rate_limit_info.items():
+            if value is not None:
+                setattr(context, key, value)
+
+    # Create appropriate exception based on status code
+    if status_code == 401:
+        return SlugKitAuthenticationError(error_message, cause=error, context=context)
+    elif status_code == 403:
+        return SlugKitAuthenticationError(error_message, cause=error, context=context)
+    elif status_code == 404:
+        return SlugKitClientError(error_message, cause=error, context=context)
+    elif status_code == 400:
+        return SlugKitValidationError(error_message, cause=error, context=context)
+    elif status_code == 429:
+        return SlugKitRateLimitError(error_message, cause=error, context=context, **rate_limit_info)
+    elif status_code >= 500:
+        return SlugKitServerError(error_message, cause=error, context=context)
     else:
-        return SlugKitClientError(
-            f"HTTP {error.response.status_code}: {error.response.text}", cause=error, context=context
-        )
+        return SlugKitClientError(error_message, cause=error, context=context)
 
 
 def should_retry_error(error: Exception) -> bool:
@@ -357,8 +575,45 @@ def should_retry_error(error: Exception) -> bool:
     if isinstance(error, httpx.HTTPStatusError):
         return 500 <= error.response.status_code < 600
 
-    # Retry on rate limit errors (temporary)
+    # Retry on rate limit errors, but only if it's actually temporary and feasible
     if isinstance(error, SlugKitRateLimitError):
+        if hasattr(error, 'rate_limit_reason') and error.rate_limit_reason:
+            reason = error.rate_limit_reason
+
+            # These reasons indicate permanent unavailability - never retry
+            permanent_unavailable = {
+                'not-available',              # Feature not available to user
+                'request-size-exceeded',      # Request size exceeds limits (won't succeed on retry)
+            }
+            if reason in permanent_unavailable:
+                return False
+
+            # Only retry for token-bucket based limits with proper retry-after calculation
+            # Rate-limit-exceeded (RPM) and daily-limit-exceeded have accurate retry-after
+            retryable_limits = {
+                'rate-limit-exceeded',        # RPM limit (token bucket with accurate retry-after)
+                'daily-limit-exceeded',       # Daily limit (token bucket with accurate retry-after)
+            }
+            if reason in retryable_limits:
+                return True
+
+            # Don't retry for long-term limits without accurate retry-after
+            non_retryable_limits = {
+                'monthly-limit-exceeded',     # Monthly quota (no accurate retry-after)
+                'lifetime-limit-exceeded',    # Lifetime quota (no accurate retry-after)
+            }
+            if reason in non_retryable_limits:
+                return False
+
+            # Redis errors might be transient, but it's a server issue - don't retry
+            # The server should handle this, not the client
+            if reason == 'redis-error':
+                return False
+
+            # Unknown reason - don't retry to be safe
+            return False
+
+        # If no reason specified, assume it's retryable (backward compatibility)
         return True
 
     return False

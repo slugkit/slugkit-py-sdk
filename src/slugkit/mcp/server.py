@@ -6,8 +6,6 @@ import os
 import argparse
 import logging
 
-import importlib.resources as pkg_resources
-
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from typing import AsyncIterator, Generator
@@ -20,7 +18,7 @@ from slugkit import AsyncClient
 from slugkit.base import (
     PatternInfo,
     DictionaryInfo,
-    DictionaryTag,
+    PaginatedTags,
     SeriesInfo,
     StatsItem,
 )
@@ -67,6 +65,11 @@ async def app_lifespan(app: FastMCP) -> AsyncIterator[AppContext]:
     finally:
         # Server shutdown will be handled by FastMCP
         pass
+
+
+def handle_error(e: Exception) -> str:
+    logger.error(f"Error: {str(e)}")
+    return f"Error: {str(e)}"
 
 
 mcp = FastMCP(
@@ -153,12 +156,11 @@ async def ping(ctx: Context[AppContext, ServerSession]) -> str:
         logger.debug("Ping successful - SlugKit API is responsive")
         return "pong"
     except Exception as e:
-        logger.error(f"Ping failed: {str(e)}")
-        return f"Connection failed: {str(e)}"
+        return handle_error(e)
 
 
 @mcp.tool()
-async def key_info(ctx: Context[AppContext, ServerSession]) -> dict:
+async def key_info(ctx: Context[AppContext, ServerSession]) -> dict | str:
     """
     Get comprehensive information about the current API key and its capabilities.
 
@@ -175,6 +177,7 @@ async def key_info(ctx: Context[AppContext, ServerSession]) -> dict:
             - series_slug: Series slug (if series-scoped)
             - scopes: List of allowed operations (forge, mint, slice, reset, stats)
             - enabled: Whether the key is active
+        str: Error message if the key info retrieval fails
 
     Use this tool to understand your key's permissions before attempting operations.
     This helps agents make informed decisions about available functionality.
@@ -195,7 +198,7 @@ async def key_info(ctx: Context[AppContext, ServerSession]) -> dict:
         }
     except Exception as e:
         logger.error(f"Failed to get key info: {str(e)}")
-        return {"error": f"Failed to get key info: {str(e)}"}
+        return handle_error(e)
 
 
 @mcp.tool()
@@ -214,7 +217,7 @@ async def validate_pattern(pattern: str, ctx: Context[AppContext, ServerSession]
 
     Returns:
         PatternInfo: The pattern information
-        str: The error message
+        str: The error message if the pattern validation fails
     """
     logger.info(f"Validate pattern tool called - pattern: {pattern}")
     try:
@@ -224,11 +227,11 @@ async def validate_pattern(pattern: str, ctx: Context[AppContext, ServerSession]
         return result
     except Exception as e:
         logger.error(f"Pattern validation failed for '{pattern}': {e}")
-        return str(e)
+        return handle_error(e)
 
 
 @mcp.tool()
-async def dictionary_info(ctx: Context[AppContext, ServerSession]) -> list[DictionaryInfo]:
+async def dictionary_info(ctx: Context[AppContext, ServerSession]) -> list[DictionaryInfo] | str:
     """
     Get comprehensive information about all available word dictionaries in SlugKit.
 
@@ -239,6 +242,7 @@ async def dictionary_info(ctx: Context[AppContext, ServerSession]) -> list[Dicti
         list[DictionaryInfo]: List of dictionary information including:
             - kind: Dictionary category (e.g., "adjective", "noun", "verb")
             - count: Total number of words in this dictionary
+        str: Error message if the dictionary info retrieval fails
 
     Use this tool to understand what word types are available for your patterns.
     Combine with dictionary_tags() to get detailed information about specific word collections.
@@ -251,24 +255,38 @@ async def dictionary_info(ctx: Context[AppContext, ServerSession]) -> list[Dicti
         return result
     except Exception as e:
         logger.error(f"Failed to get dictionary info: {str(e)}")
-        raise
+        return handle_error(e)
 
 
 @mcp.tool()
-async def dictionary_tags(ctx: Context[AppContext, ServerSession]) -> list[DictionaryTag]:
+async def dictionary_tags(
+    kind: str, ctx: Context[AppContext, ServerSession], *, limit: int = 100, offset: int = 0
+) -> PaginatedTags | str:
     """
     Get detailed information about dictionary tags and their properties.
 
     This tool provides information about tags that can be used to filter and categorize
     words within dictionaries, such as content ratings, themes, or language variants.
 
+    Args:
+        kind: The kind of dictionary to get tags for
+        limit: The maximum number of tags to return
+        offset: The starting index of the tags to return
+
     Returns:
-        list[DictionaryInfo]: List of dictionary tag information including:
-            - kind: Dictionary category this tag applies to
-            - tag: Tag identifier (e.g., "family-friendly", "technical")
-            - description: Human-readable description of the tag
-            - opt_in: Whether this tag is opt-in by default
-            - word_count: Number of words with this tag
+        PaginatedTags: Object containing pagination information and a list of dictionary tag information including:
+            - data: List of dictionary tag information including:
+                - kind: Dictionary category this tag applies to
+                - tag: Tag identifier (e.g., "family-friendly", "technical")
+                - description: Human-readable description of the tag
+                - opt_in: Whether this tag is opt-in by default
+                - word_count: Number of words with this tag
+            - pagination: Pagination information including:
+                - limit: Maximum number of tags to return
+                - offset: Starting index of the tags to return
+                - total: Total number of tags
+                - has_more: Whether there are more tags to return
+        str: Error message if the dictionary tags retrieval fails
 
     Use this tool to understand available word filtering options for creating
     appropriate content for different audiences or contexts.
@@ -276,12 +294,12 @@ async def dictionary_tags(ctx: Context[AppContext, ServerSession]) -> list[Dicti
     logger.info("Dictionary tags tool called - retrieving dictionary tag information")
     try:
         client = get_client_for_session(ctx)
-        result = await client.forge.dictionary_tags()
-        logger.debug(f"Successfully retrieved {len(result)} dictionary tags")
+        result = await client.forge.dictionary_tags(kind, limit=limit, offset=offset)
+        logger.debug(f"Successfully retrieved {len(result.data)} dictionary tags")
         return result
     except Exception as e:
         logger.error(f"Failed to get dictionary tags: {str(e)}")
-        raise
+        return handle_error(e)
 
 
 @mcp.tool()
@@ -292,7 +310,7 @@ async def forge(
     sequence: int = 0,
     count: int = 1,
     ctx: Context[AppContext, ServerSession],
-) -> list[str]:
+) -> list[str] | str:
     """
     Generate unique, human-readable slugs from a pattern without using a predefined series.
 
@@ -308,6 +326,7 @@ async def forge(
 
     Returns:
         list[str]: List of generated unique slugs matching the pattern
+        str: Error message if the forge operation fails
 
     Examples:
         - Basic: pattern="{adjective}-{noun}", count=3
@@ -328,19 +347,24 @@ async def forge(
         return result
     except Exception as e:
         logger.error(f"Error forging slugs with pattern '{pattern}': {str(e)}")
-        raise
+        return handle_error(e)
 
 
 @mcp.tool()
-async def series_list(ctx: Context[AppContext, ServerSession]) -> list[str]:
+async def series_list(ctx: Context[AppContext, ServerSession]) -> dict[str, str] | str:
     """
     Get a list of all available series slugs that can be used for minting or slicing.
+
+    Returns a map of series slugs to their names.
 
     A series is a predefined collection of slugs with a specific pattern and configuration.
     Use this tool to discover available series before using mint() or slice() operations.
 
+    Note: this tool is available to org-scoped API keys with the 'series:read' scope.
+
     Returns:
-        list[str]: List of available series slug identifiers
+        dict[str, str]: Map of series slugs to their names
+        str: Error message if the series list retrieval fails
 
     Use this tool to explore what series are available, then use series_info() to get
     detailed information about a specific series before minting or slicing from it.
@@ -353,7 +377,7 @@ async def series_list(ctx: Context[AppContext, ServerSession]) -> list[str]:
         return result
     except Exception as e:
         logger.error(f"Failed to get series list: {str(e)}")
-        raise
+        return handle_error(e)
 
 
 @mcp.tool()
@@ -361,7 +385,7 @@ async def series_info(
     *,
     series_slug: str = "",
     ctx: Context[AppContext, ServerSession],
-) -> SeriesInfo:
+) -> SeriesInfo | str:
     """
     Get detailed information about a series, including its pattern, capacity, and usage statistics.
 
@@ -370,6 +394,8 @@ async def series_info(
 
     Note: Series info is cached by the server for 30-60 seconds, so the results may not be up to date.
     Don't expect the results to be accurate immediately after each operation.
+
+    Note: this tool is available to API keys with the 'series:read' scope.
 
     Args:
         series_slug: The slug identifier of the series to examine (optional)
@@ -384,18 +410,148 @@ async def series_info(
             - capacity: Total possible unique slugs this series can generate
             - generated_count: Number of slugs already generated
             - mtime: Last modification time
+        str: Error message if the series info retrieval fails
 
     Use this tool to understand a series's capabilities and current usage before
     minting or slicing from it. Combine with stats() to get performance metrics.
     """
     # Handle empty string as "not provided"
-    client = get_client_for_session(ctx)
-    if series_slug:
-        logger.debug(f"Getting info for specific series: {series_slug}")
-        return await client.series[series_slug].info()
-    else:
-        logger.debug("Getting info for default series")
-        return await client.series.info()
+    try:
+        client = get_client_for_session(ctx)
+        if series_slug:
+            logger.debug(f"Getting info for specific series: {series_slug}")
+            return await client.series[series_slug].info()
+        else:
+            logger.debug("Getting info for default series")
+            return await client.series.info()
+    except Exception as e:
+        logger.error(f"Failed to get series info: {str(e)}")
+        return handle_error(e)
+
+
+@mcp.tool()
+async def series_create(
+    *,
+    name: str = "",
+    pattern: str = "",
+    ctx: Context[AppContext, ServerSession],
+) -> SeriesInfo | str:
+    """
+    Create a new series with a given pattern and name.
+
+    Args:
+        name: The name of the series to create (required)
+        pattern: The pattern to use for the series (required)
+
+    Returns:
+        SeriesInfo: The created series information
+        str: Error message if the series creation fails
+
+    Note: this tool is available to org-scoped API keys with the 'series:create' scope.
+
+    Use this tool to create a new series with a given pattern and name.
+    The series will be created with the given pattern and name, and will be
+    added to the default series.
+
+    Examples:
+        - Create a new series with a given pattern and name:
+          name="My Series", pattern="{adjective}-{noun}"
+        - Create a new series with a given pattern and name:
+          name="My Series", pattern="{adjective}-{noun}-{number:4d}"
+    """
+    logger.info(f"Series create tool called - name: {name}, pattern: {pattern}")
+    try:
+        client = get_client_for_session(ctx)
+        return await client.series.create(name, pattern)
+    except Exception as e:
+        logger.error(f"Failed to create series: {str(e)}")
+        return handle_error(e)
+
+
+@mcp.tool()
+async def series_update(
+    *,
+    series_slug: str = "",
+    name: str = "",
+    pattern: str = "",
+    ctx: Context[AppContext, ServerSession],
+) -> SeriesInfo | str:
+    """
+    Update a series with a given pattern and name.
+
+    Args:
+        series_slug: The slug identifier of the series to update (optional)
+                    If not provided, updates the default/current series
+        name: The name of the series to update (required)
+        pattern: The pattern to use for the series (required)
+
+    Returns:
+        SeriesInfo: The updated series information
+        str: Error message if the series update fails
+
+    Note: this tool is available to org-scoped API keys with the 'series:update' scope.
+
+    Note: if the series has any slugs minted, the settings are locked and cannot be updated.
+
+    Use this tool to update a series with a given pattern and name.
+    The series will be updated with the given pattern and name.
+
+    Examples:
+        - Update a series with a given pattern and name:
+          series_slug="my-series", name="My Series", pattern="{adjective}-{noun}"
+        - Update a series with a given pattern and name:
+          series_slug="my-series", name="My Series", pattern="{adjective}-{noun}-{number:4d}"
+    """
+    logger.info(f"Series update tool called - series: {series_slug}, name: {name}, pattern: {pattern}")
+    try:
+        client = get_client_for_session(ctx)
+        if series_slug:
+            return await client.series[series_slug].update(name, pattern)
+        else:
+            return await client.series.update(name, pattern)
+    except Exception as e:
+        logger.error(f"Failed to update series: {str(e)}")
+        return handle_error(e)
+
+
+@mcp.tool()
+async def series_delete(
+    *,
+    series_slug: str = "",
+    ctx: Context[AppContext, ServerSession],
+) -> str:
+    """
+    Delete a series and all its data.
+
+    Args:
+        series_slug: The slug identifier of the series to delete (optional)
+                    If not provided, deletes the default/current series
+
+    Returns:
+        str: Confirmation message indicating the delete was successful or error message if the series deletion fails
+
+    Note: this tool is available to org-scoped API keys with the 'series:delete' scope.
+    Use this tool to delete a series and all its data. This action cannot be undone.
+
+    Examples:
+        - Delete a series with a given slug:
+          series_slug="my-series"
+        - Delete the default series:
+          series_slug=""
+
+    """
+    logger.info(f"Series delete tool called - series: {series_slug}")
+    try:
+        client = get_client_for_session(ctx)
+        if series_slug:
+            await client.series[series_slug].delete()
+        else:
+            await client.series.delete()
+        logger.debug(f"Successfully deleted series: {series_slug or 'default'}")
+        return f"Series {series_slug or 'default'} has been deleted successfully"
+    except Exception as e:
+        logger.error(f"Failed to delete series: {str(e)}")
+        return handle_error(e)
 
 
 @mcp.tool()
@@ -415,7 +571,7 @@ async def reset(
                     If not provided, resets the default/current series
 
     Returns:
-        str: Confirmation message indicating the reset was successful
+        str: Confirmation message indicating the reset was successful or error message if the series reset fails
 
     Use this tool carefully as it will permanently clear all generated slugs from
     the specified series. Consider backing up any important slugs before resetting.
@@ -433,7 +589,7 @@ async def reset(
         return f"Series {series_slug or 'default'} has been reset successfully"
     except Exception as e:
         logger.error(f"Failed to reset series {series_slug or 'default'}: {str(e)}")
-        return f"Failed to reset series: {str(e)}"
+        return handle_error(e)
 
 
 @mcp.tool()
@@ -441,7 +597,7 @@ async def stats(
     *,
     series_slug: str = "",
     ctx: Context[AppContext, ServerSession],
-) -> list[StatsItem]:
+) -> list[StatsItem] | str:
     """
     Get comprehensive performance and usage statistics for a series.
 
@@ -464,6 +620,7 @@ async def stats(
             - request_count: Number of API requests made
             - total_duration_us: Total processing time in microseconds
             - avg_duration_us: Average processing time per request
+        str: Error message if the stats retrieval fails
 
     Use this tool to monitor series performance, track usage patterns, and identify
     potential bottlenecks or optimization opportunities.
@@ -480,7 +637,7 @@ async def stats(
         return result
     except Exception as e:
         logger.error(f"Failed to get stats for series {series_slug or 'default'}: {str(e)}")
-        raise
+        return handle_error(e)
 
 
 @mcp.tool()
@@ -490,7 +647,7 @@ async def mint(
     count: int = 1,
     batch_size: int = 1000,
     ctx: Context[AppContext, ServerSession],
-) -> list[str]:
+) -> list[str] | str:
     """
     Mint new, unique slugs from a series using its predefined pattern.
 
@@ -506,6 +663,7 @@ async def mint(
 
     Returns:
         list[str]: List of newly minted, unique slugs from the series
+        str: Error message if the mint operation fails
 
     Use this tool when you need to generate slugs that are part of a managed series.
     The generated slugs will be tracked in the series statistics and cannot be
@@ -533,7 +691,7 @@ async def mint(
         return result
     except Exception as e:
         logger.error(f"Error minting slugs: {str(e)}")
-        return [f"Error minting slugs: {str(e)}"]
+        return handle_error(e)
 
 
 @mcp.tool()
@@ -544,7 +702,7 @@ async def slice(
     batch_size: int = 1000,
     sequence: int = 0,
     ctx: Context[AppContext, ServerSession],
-) -> list[str]:
+) -> list[str] | str:
     """
     Slice (dry-run preview) slugs from a series without actually consuming them.
 
@@ -561,6 +719,7 @@ async def slice(
 
     Returns:
         list[str]: List of previewed slugs (these are NOT consumed from the series)
+        str: Error message if the slice operation fails
 
     Use this tool when you want to see what slugs would be generated without
     actually minting them. This is perfect for testing patterns, validating
@@ -586,7 +745,7 @@ async def slice(
             result.append(slug)
         return result
     except Exception as e:
-        return [f"Error slicing slugs: {str(e)}"]
+        return handle_error(e)
 
 
 @mcp.tool()
@@ -594,7 +753,7 @@ async def analyze_pattern(
     *,
     pattern: str,
     ctx: Context[AppContext, ServerSession],
-) -> dict:
+) -> dict | str:
     """
     Analyze a SlugKit pattern to understand its characteristics and capabilities.
 
@@ -616,6 +775,7 @@ async def analyze_pattern(
             - components: Number of placeholder components
             - uniqueness_score: Relative uniqueness rating
             - recommendations: Suggestions for optimization
+        str: Error message if the pattern analysis fails
 
     Use this tool to evaluate pattern designs and understand their scalability
     before implementing them in production systems. This is analysis-focused,
@@ -697,7 +857,7 @@ async def analyze_pattern(
 
     except Exception as e:
         logger.error(f"Pattern analysis failed for '{pattern}': {str(e)}")
-        return {"error": f"Pattern analysis failed: {str(e)}", "pattern": pattern}
+        return handle_error(e)
 
 
 @mcp.tool()
@@ -707,7 +867,7 @@ async def compare_patterns(
     count_per_pattern: int = 3,
     seed: str = "",
     ctx: Context[AppContext, ServerSession],
-) -> dict:
+) -> dict | str:
     """
     Compare multiple SlugKit patterns by generating sample slugs from each.
 
@@ -726,6 +886,7 @@ async def compare_patterns(
             - comparison: Dictionary mapping each pattern to its generated slugs
             - analysis: Pattern analysis for each pattern
             - recommendations: Suggestions for pattern selection
+        str: Error message if the pattern comparison fails
 
     Use this tool when you need to compare outputs from different patterns
     or generate variations for testing and selection purposes.
@@ -790,7 +951,7 @@ async def compare_patterns(
 
     except Exception as e:
         logger.error(f"Pattern comparison failed: {str(e)}")
-        return {"error": f"Pattern comparison failed: {str(e)}"}
+        return handle_error(e)
 
 
 def parse_args():

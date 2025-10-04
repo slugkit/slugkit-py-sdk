@@ -73,18 +73,40 @@ exclude_tag := '-' tag
 ```
 
 ```
-{adjective:+positive}          // Include positive words
+{adjective:+pos}               // Include positive words
 {noun:-nsfw}                   // Exclude NSFW words
-{adjective:+tech-negative}     // Include tech, exclude negative
+{adjective:+obj-neg}           // Include objective, exclude negative
 {noun:+animal+object}          // Include both animal and object tags
 ```
 
 **Tag syntax**: Tags are identifiers (letters, numbers, underscores). Multiple tags can be combined with `+` for inclusion and `-` for exclusion.
 
-Common tags:
+**Available Tags by Category:**
+
+**Adjectives:**
 - **Emotional**: `+pos`, `+neg`, `+emo`, `+neut`
-- **Content**: `+nsfw` (opt-in), `+det`, `+obj`
-- **Domain-specific**: `+tech`, `+animal`, `+food`, `+person`
+- **Content**: `+obj`, `+det`
+- **Content Warning**: `+nsfw` (opt-in)
+
+**Nouns:**
+- **Objects**: `+object`, `+artifact`, `+device`, `+machine`
+- **Living**: `+person`, `+animal`
+- **Places**: `+location`, `+building`
+- **Abstract**: `+concept`, `+idea`, `+emotion`, `+feeling`
+- **Activities**: `+activity`, `+action`, `+event`
+- **Substances**: `+substance`, `+material`, `+chemical`, `+drug`, `+food`, `+drink`
+- **Content**: `+content`, `+information`, `+music`, `+art`
+- **Fantasy**: `+fantasy` (59 words available)
+- **Other**: `+creation`, `+unit`, `+number`, `+currency`, `+plant`, `+state`, `+shop`
+
+**Verbs:**
+- **Types**: `+change`, `+act`, `+travel`, `+be`, `+have`, `+make`, `+become`, `+create`, `+take`, `+give`
+- **Actions**: `+destroy`, `+imagine`
+
+**Domains:**
+- **Common TLDs**: `+com`, `+org`, `+net`, `+tld`
+- **Tech**: `+dev`, `+io`, `+app`, `+cloud`, `+tech`
+- **Geographic**: Country codes like `+us`, `+uk`, `+de`, etc.
 
 #### Length Constraints
 ```ebnf
@@ -121,8 +143,8 @@ Options will provide additional configuration for word selectors:
 Currently supported constraints must be in the exact order: **tags → length** (options reserved for future)
 ```
 {adjective:+pos<6}              // ✅ Correct: tags first, then length
-{noun:+tech-nsfw>=4}            // ✅ Correct: tags, then length  
-{verb:<8+action}                // ❌ Wrong: length before tags
+{noun:+device-nsfw>=4}          // ✅ Correct: tags, then length  
+{verb:<8+act}                   // ❌ Wrong: length before tags
 {noun:>=4+animal}               // ❌ Wrong: length before tags
 {adjective:+pos<6,opt=val}      // ❌ Not yet supported: options
 ```
@@ -170,7 +192,7 @@ global_settings := '[' ['@' lang] [tags] [length_constraint] [options] ']'
 Apply settings to ALL placeholders in the pattern:
 ```
 {adjective}-{noun}[@en:+pos-nsfw<6]
-{verb} {noun} {adverb}[+tech>=4]
+{verb} {noun} {adverb}[+obj>=4]
 ```
 
 **Components**:
@@ -210,7 +232,7 @@ Examples:
 ```
 {adjective}-{noun}                    → "fast-server"
 {adjective:<6}-{noun:<8}-{number:3d}  → "quick-database-127"  
-{verb:>=5}-{noun:+tech}               → "deploy-microservice"
+{verb:>=5}-{noun:+device}             → "deploy-microservice"
 ```
 
 ### Natural Language
@@ -226,7 +248,7 @@ Examples:
 ```
 "server_name: {adjective}-{noun}
 port: {number:4d}
-debug: {adjective:+tech}"
+debug: {adjective:+obj}"
 
 → "server_name: fast-proxy
 port: 8080
@@ -254,7 +276,7 @@ debug: verbose"
 host = {noun:<8}.local
 port = {number:4d}
 timeout = {number:2d}s
-ssl = {adjective:+tech}"
+ssl = {adjective:+obj}"
 
 → "[database]
 host = postgres.local  
@@ -281,14 +303,14 @@ vs
 
 ### 3. Apply Appropriate Tags
 ```
-{adjective:+pos}-{noun:+tech}     // Professional, positive tech terms
-{noun:+animal}-{verb:+action}     // Animal action combinations
+{adjective:+pos}-{noun:+device}     // Positive words with device nouns
+{noun:+animal}-{verb:+act}          // Animal action combinations
 ```
 
 ### 4. Leverage Global Settings for Consistency
 ```
-{adjective}-{noun}-{verb}[+tech<8]   // All tech words, max 7 chars (< 8)
-{noun} and {noun}[@en:>=4]           // English words, min 4 chars
+{adjective}-{noun}-{verb}[+obj<8]   // All objective words, max 7 chars (< 8)
+{noun} and {noun}[@en:>=4]          // English words, min 4 chars
 ```
 
 ### 5. Consider Your Use Case
@@ -298,8 +320,6 @@ vs
 - **Commands**: Realistic tool names and parameters
 
 ## Common Patterns
-
-### Common Patterns
 
 ### Web Development
 ```
@@ -312,7 +332,7 @@ vs
 ```
 "deploy {Noun} to {adjective}-env"           → "deploy Service to staging-env"
 "backup-{noun}-{number:2d}{number:2d}{number:4d}" → "backup-db-15122024"
-"{ADJECTIVE}_{NOUN}_CONFIG"                  → "PROD_DATABASE_CONFIG"
+"{ADJECTIVE}_{NOUN}_CONFIG"                  → "STABLE_DATABASE_CONFIG"
 ```
 
 ### Testing Data
@@ -338,8 +358,11 @@ This tutorial will help you deploy efficiently."
 ❌ {adjective}<8      // Length constraint outside braces (becomes literal "<8")
 ✅ {adjective:<8}     // Correct: constraint inside braces
 
-❌ {noun}+tech        // Tag outside braces (becomes literal "+tech")  
-✅ {noun:+tech}       // Correct: tag inside braces
+❌ {noun}+device      // Tag outside braces (becomes literal "+device")  
+✅ {noun:+device}     // Correct: tag inside braces
+
+❌ {adjective:+tech}  // Non-existent tag
+✅ {adjective:+obj}   // Valid tag
 ```
 
 ### Validation Tips
@@ -347,6 +370,7 @@ This tutorial will help you deploy efficiently."
 - Arbitrary text goes OUTSIDE braces: `{word} literal text`
 - Use `validate_pattern()` to verify syntax and see capacity
 - Use `dictionary_tags()` to see available tag filters
+- Use `dictionary_info()` to understand word categories
 
 ## Advanced Features
 
@@ -359,9 +383,9 @@ This tutorial will help you deploy efficiently."
 
 ### Complex Filtering
 ```
-{adjective:+pos+tech-nsfw<6>=3}    // Positive tech adjectives, 3-5 chars (< 6, >= 3)
+{adjective:+pos+obj-nsfw<6>=3}    // Positive objective adjectives, 3-5 chars
 {noun:+animal+fantasy!=5}         // Animal/fantasy nouns, not exactly 5 chars
-{verb:+action<=8,option1=value}   // Action verbs, max 8 chars, with custom option
+{verb:+act<=8,option1=value}      // Action verbs, max 8 chars, with future option
 ```
 
 ### Sequence Control  
@@ -375,7 +399,41 @@ sequence=1000 → 383, 766, 149... (same as sequence=0 due to wrapping)
 
 **Wrapping**: Sequence values wrap at the generator's capacity (e.g., 1000 for 3-digit decimals). So `sequence=1000` equals `sequence=0` for `{number:3d}`.
 
+## Available Tags Reference
+
+Use `dictionary_tags()` to get the complete, up-to-date list. Here are the main categories:
+
+### Adjectives (7 tags)
+- `pos` (710 words) - Positive words
+- `neg` (1,395 words) - Negative words  
+- `obj` (8,382 words) - Objective words
+- `det` (14,138 words) - Detached words
+- `neut` (6,595 words) - Neutral words
+- `emo` (2,944 words) - Emotional words
+- `nsfw` (35 words) - Not safe for work (opt-in)
+
+### Nouns (44 tags)
+Most commonly used:
+- `object` (18,861 words) - General objects
+- `device` (1,673 words) - Technical devices  
+- `artifact` (6,787 words) - Man-made objects
+- `person` (6,273 words) - People and roles
+- `animal` (2,437 words) - Animals
+- `location` (882 words) - Places
+- `fantasy` (59 words) - Fantasy terms
+
+### Verbs (17 tags) 
+- `change` (2,583 words) - Change actions
+- `act` (1,246 words) - General actions
+- `travel` (463 words) - Movement
+- And more...
+
+### Domains (195+ tags)
+- Common: `com`, `org`, `net`, `tld`  
+- Tech: `dev`, `io`, `app`, `cloud`, `tech`
+- Geographic: `us`, `uk`, `de`, `jp`, etc.
+
 ---
 
 [^1]: *For formal grammar specification, see the EBNF grammar documentation.*
-[^2]: *For available word types and tags, use `dictionary_info()` and `dictionary_tags()`.*
+[^2]: *For complete available word types and tags, use `dictionary_info()` and `dictionary_tags()`.*

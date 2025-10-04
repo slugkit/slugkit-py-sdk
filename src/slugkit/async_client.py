@@ -6,12 +6,13 @@ from typing import Any, AsyncGenerator, Callable
 
 from .base import (
     DictionaryInfo,
-    DictionaryTag,
+    PaginatedTags,
     GeneratorBase,
     PatternInfo,
     StatsItem,
     SeriesInfo,
     KeyInfo,
+    SubscriptionFeatures,
     retry_with_backoff,
     SlugKitConnectionError,
     SlugKitAuthenticationError,
@@ -36,9 +37,12 @@ class AsyncSlugGenerator(GeneratorBase):
         path = self._get_path()
         client = await self._http_client()
         self._logger.info(f"Requesting {count} slug(s)")
-        response = await client.post(path, json=req)
-        response.raise_for_status()
-        return response.json()
+        try:
+            response = await client.post(path, json=req)
+            response.raise_for_status()
+            return response.json()
+        except httpx.HTTPStatusError as e:
+            raise handle_http_error(e, "mint_slugs", path)
 
     async def stream(self) -> AsyncGenerator[str, Any]:
         count = 0
@@ -77,11 +81,9 @@ class AsyncSlugGenerator(GeneratorBase):
                             if limit is not None and count >= limit:
                                 return
                 sequence += current_batch_size
-        except Exception as e:
-            # Log error and break to avoid infinite loops
-            import logging
-
-            logging.error(f"Error in async mint: {e}")
+        except httpx.HTTPStatusError as e:
+            raise handle_http_error(e, "stream_slugs", path)
+        except KeyboardInterrupt:
             return
 
     def __aiter__(self) -> AsyncGenerator[str, None]:
@@ -110,30 +112,42 @@ class AsyncRandomGenerator(GeneratorBase):
         if count:
             req["count"] = count
         client = await self._http_client()
-        response = await client.post(Endpoints.FORGE.value, json=req)
-        response.raise_for_status()
-        return response.json()
+        try:
+            response = await client.post(Endpoints.FORGE.value, json=req)
+            response.raise_for_status()
+            return response.json()
+        except httpx.HTTPStatusError as e:
+            raise handle_http_error(e, "forge_slugs", Endpoints.FORGE.value, pattern=pattern)
 
     async def pattern_info(self, pattern: str) -> PatternInfo:
         client = await self._http_client()
-        response = await client.post(Endpoints.PATTERN_INFO.value, json={"pattern": pattern})
-        response.raise_for_status()
-        data = response.json()
-        return PatternInfo.from_dict(data)
+        try:
+            response = await client.post(Endpoints.PATTERN_INFO.value, json={"pattern": pattern})
+            response.raise_for_status()
+            data = response.json()
+            return PatternInfo.from_dict(data)
+        except httpx.HTTPStatusError as e:
+            raise handle_http_error(e, "pattern_info", Endpoints.PATTERN_INFO.value, pattern=pattern)
 
     async def dictionary_info(self) -> list[DictionaryInfo]:
         client = await self._http_client()
-        response = await client.get(Endpoints.DICTIONARY_INFO.value)
-        response.raise_for_status()
-        data = response.json()
-        return [DictionaryInfo.from_dict(item) for item in data]
+        try:
+            response = await client.get(Endpoints.DICTIONARY_INFO.value)
+            response.raise_for_status()
+            data = response.json()
+            return [DictionaryInfo.from_dict(item) for item in data]
+        except httpx.HTTPStatusError as e:
+            raise handle_http_error(e, "dictionary_info", Endpoints.DICTIONARY_INFO.value)
 
-    async def dictionary_tags(self) -> list[DictionaryTag]:
+    async def dictionary_tags(self, kind: str, *, limit: int = 100, offset: int = 0) -> PaginatedTags:
         client = await self._http_client()
-        response = await client.get(Endpoints.DICTIONARY_TAGS.value)
-        response.raise_for_status()
-        data = response.json()
-        return [DictionaryTag.from_dict(item) for item in data]
+        try:
+            response = await client.get(f"{Endpoints.DICTIONARY_TAGS.value}/{kind}?limit={limit}&offset={offset}")
+            response.raise_for_status()
+            data = response.json()
+            return PaginatedTags.from_dict(data)
+        except httpx.HTTPStatusError as e:
+            raise handle_http_error(e, "dictionary_tags", Endpoints.DICTIONARY_TAGS.value)
 
 
 class AsyncSeriesClient:
@@ -198,7 +212,7 @@ class AsyncSeriesClient:
             raise handle_http_error(e, "series_info", Endpoints.SERIES_INFO.value)
 
     @retry_with_backoff(max_attempts=3, base_delay=1.0)
-    async def list(self) -> list[str]:
+    async def list(self) -> dict[str, str]:
         try:
             client = await self._http_client()
             response = await client.get(Endpoints.SERIES_LIST.value)
@@ -207,6 +221,43 @@ class AsyncSeriesClient:
             return data
         except httpx.HTTPStatusError as e:
             raise handle_http_error(e, "series_list", Endpoints.SERIES_LIST.value)
+
+    @retry_with_backoff(max_attempts=3, base_delay=1.0)
+    async def create(self, name: str, pattern: str) -> SeriesInfo:
+        try:
+            client = await self._http_client()
+            response = await client.post(Endpoints.SERIES_CREATE.value, json={"name": name, "pattern": pattern})
+            response.raise_for_status()
+            data = response.json()
+            return SeriesInfo.from_dict(data)
+        except httpx.HTTPStatusError as e:
+            raise handle_http_error(e, "series_create", Endpoints.SERIES_CREATE.value)
+
+    @retry_with_backoff(max_attempts=3, base_delay=1.0)
+    async def update(self, name: str, pattern: str) -> SeriesInfo:
+        try:
+            client = await self._http_client()
+            response = await client.put(
+                Endpoints.SERIES_UPDATE.value, json={"series": self._series, "name": name, "pattern": pattern}
+            )
+            response.raise_for_status()
+            data = response.json()
+            return SeriesInfo.from_dict(data)
+        except httpx.HTTPStatusError as e:
+            raise handle_http_error(e, "series_update", Endpoints.SERIES_UPDATE.value)
+
+    @retry_with_backoff(max_attempts=3, base_delay=1.0)
+    async def delete(self) -> None:
+        try:
+            client = await self._http_client()
+            response = await client.request(
+                "DELETE",
+                Endpoints.SERIES_DELETE.value,
+                json={"series": self._series},
+            )
+            response.raise_for_status()
+        except httpx.HTTPStatusError as e:
+            raise handle_http_error(e, "series_delete", Endpoints.SERIES_DELETE.value)
 
     @retry_with_backoff(max_attempts=3, base_delay=1.0)
     async def reset(self) -> None:
@@ -273,6 +324,24 @@ class AsyncClient:
             return KeyInfo.from_dict(data)
         except httpx.HTTPStatusError as e:
             raise handle_http_error(e, "key_info", Endpoints.KEY_INFO.value)
+
+    @retry_with_backoff(max_attempts=3, base_delay=1.0)
+    async def limits(self) -> SubscriptionFeatures:
+        """Get the organisation's subscription limits and features.
+
+        Returns:
+            SubscriptionFeatures: The subscription limits and features
+        """
+        if not self._api_key:
+            raise ValueError("API key is required")
+        try:
+            client = await self._http_client()
+            response = await client.get(Endpoints.LIMITS.value)
+            response.raise_for_status()
+            data = response.json()
+            return SubscriptionFeatures.from_dict(data)
+        except httpx.HTTPStatusError as e:
+            raise handle_http_error(e, "limits", Endpoints.LIMITS.value)
 
     @property
     def api_key(self) -> str | None:
